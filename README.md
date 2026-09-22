@@ -30,11 +30,6 @@ docker compose exec app php artisan db:seed --class=DemoSeeder
 см. [Настройка бота и webhook](#настройка-бота-и-webhook). Без токена админка
 полностью работоспособна, не работает только отправка сообщений.
 
-## Скриншоты
-
-Пока не сняты. Что и в каком порядке снимать — в
-[docs/screenshots/README.md](docs/screenshots/README.md).
-
 ## Что умеет
 
 **Бот**
@@ -262,7 +257,7 @@ php artisan nutgram:register-commands
 | `php artisan nutgram:register-commands` | Зарегистрировать меню команд бота |
 | `php artisan nutgram:list` | Показать все зарегистрированные обработчики |
 | `php artisan queue:work` | Воркер очереди: рассылки |
-| `php artisan db:seed --class=DemoSeeder` | Демо-пользователи и заявки для скриншотов |
+| `php artisan db:seed --class=DemoSeeder` | Наполнить админку демо-пользователями и заявками |
 | `php artisan test` | Прогнать тесты |
 | `vendor/bin/pint` | Привести код к стилю Laravel |
 
