@@ -1,0 +1,81 @@
+# Локальный стек: админка, база, воркер очереди и бот.
+# Переменные подставляются из .env проекта — токен в compose.yaml не попадает.
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: telegram_bot_admin
+      MYSQL_USER: telegram
+      MYSQL_PASSWORD: ${DOCKER_DB_PASSWORD:-secret}
+      MYSQL_ROOT_PASSWORD: ${DOCKER_DB_ROOT_PASSWORD:-secret}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      # Наружу отдаём 3307: 3306 уже занят MySQL из OSPanel.
+      - "127.0.0.1:3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${DOCKER_DB_ROOT_PASSWORD:-secret}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  app:
+    build: .
+    command: ["serve"]
+    environment: &app-env
+      APP_NAME: "Telegram Bot Admin"
+      APP_KEY: ${APP_KEY:?в .env нужен APP_KEY — сгенерируйте php artisan key:generate}
+      APP_URL: http://localhost:8080
+      APP_DEBUG: "false"
+      DB_HOST: mysql
+      DB_DATABASE: telegram_bot_admin
+      DB_USERNAME: telegram
+      DB_PASSWORD: ${DOCKER_DB_PASSWORD:-secret}
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      TELEGRAM_ADMIN_CHAT_IDS: ${TELEGRAM_ADMIN_CHAT_IDS:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-password}
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Рассылки уходят через очередь, поэтому воркер — обязательная часть стека.
+  queue:
+    build: .
+    command: ["queue"]
+    environment: *app-env
+    # Healthcheck базового образа стучится по HTTP, а воркер порт не слушает.
+    healthcheck:
+      disable: true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      app:
+        condition: service_started
+    restart: unless-stopped
+
+  # Long polling для локальной разработки: снаружи webhook сюда не достучится.
+  # Запускать отдельно: docker compose --profile bot up -d
+  # На проде вместо этого ставится webhook: php artisan telegram:webhook set
+  bot:
+    build: .
+    command: ["bot"]
+    environment: *app-env
+    healthcheck:
+      disable: true
+    profiles: ["bot"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      app:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  mysql-data:

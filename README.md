@@ -121,6 +121,48 @@ Open Server Panel, чтобы она перечитала список прое�
   (например `127.0.1.28`). Точный IP показан в окне OSPanel и в `hosts`; его и пишем
   в `DB_HOST`. Либо используйте имя хоста, которое OSPanel прописывает сам: `mysql-8.4`.
 
+### Запуск в Docker
+
+Нужен только `.env` с заполненным `APP_KEY` — остальное поднимется само:
+
+```bash
+cp .env.example .env
+docker compose run --rm app php artisan key:generate --show   # впишите результат в .env
+docker compose up -d
+```
+
+Админка: <http://localhost:8080/admin>, вход из `ADMIN_EMAIL` и `ADMIN_PASSWORD`.
+
+Стек состоит из трёх сервисов:
+
+| Сервис | Роль |
+|--------|------|
+| `app` | FrankenPHP отдаёт `public/` напрямую, без связки nginx + php-fpm. На старте накатывает миграции и сидеры |
+| `mysql` | MySQL 8.4, данные в именованном томе. Наружу отдан порт **3307** — 3306 обычно занят локальной базой |
+| `queue` | `queue:work`, разбирает рассылки. Без него рассылка навсегда останется в статусе «В очереди» |
+
+Все три роли — один и тот же образ, различаются только аргументом команды
+(`serve`, `queue`, `bot`) — его разбирает [docker/entrypoint.sh](docker/entrypoint.sh).
+
+Бот в Docker поднимается отдельным профилем, потому что снаружи webhook до
+локального контейнера не достучится и остаётся long polling:
+
+```bash
+docker compose --profile bot up -d
+```
+
+Artisan-команды выполняются в работающем контейнере:
+
+```bash
+docker compose exec app php artisan telegram:webhook info
+docker compose exec app php artisan admin:create
+docker compose logs -f queue
+```
+
+Переменные `compose.yaml` берёт из `.env` проекта, поэтому токен бота в
+репозиторий не попадает. `DB_HOST` внутри сети Docker всегда `mysql` — значение
+из вашего `.env` перекрывается, локальная база OSPanel не задействована.
+
 ## Настройка бота и webhook
 
 ### 1. Создать бота
@@ -229,6 +271,9 @@ app/
     ├── Handlers/            Меню, каталог, мои заявки
     ├── Middleware/          TrackTelegramUser — регистрация и лог входящих
     └── Support/             Keyboards, Texts, Screen, BotContext
+
+docker/
+└── entrypoint.sh            Выбор роли контейнера: serve, queue, bot
 
 routes/
 ├── telegram.php             Обработчики бота
