@@ -4,18 +4,36 @@
 и оставляет заявку за минуту, администратор видит её в веб-панели, меняет статус,
 отвечает клиенту прямо из админки и запускает рассылки по базе пользователей.
 
-**Демо-бот:** [@your_demo_bot](https://t.me/your_demo_bot) ·
-**Демо-админка:** `https://example.com/admin` (логин `demo@example.com` / `demo1234`)
+## Как посмотреть
 
-> Ссылки выше подставляются после деплоя демо-стенда.
+Публичный демо-стенд пока не развёрнут, поэтому самый быстрый способ —
+поднять проект локально одной командой:
+
+```bash
+cp .env.example .env
+docker compose run --rm app php artisan key:generate --show   # впишите результат в APP_KEY
+docker compose up -d
+```
+
+Админка откроется на <http://localhost:8080/admin>, учётные данные — из
+`ADMIN_EMAIL` и `ADMIN_PASSWORD` в `.env` (по умолчанию `admin@example.com`
+и `password`). Каталог услуг и учётка администратора создаются при первом старте.
+
+Чтобы посмотреть админку не на пустых таблицах, добавьте демо-пользователей
+и заявки:
+
+```bash
+docker compose exec app php artisan db:seed --class=DemoSeeder
+```
+
+Чтобы поговорить с ботом, нужен свой токен от [@BotFather](https://t.me/BotFather) —
+см. [Настройка бота и webhook](#настройка-бота-и-webhook). Без токена админка
+полностью работоспособна, не работает только отправка сообщений.
 
 ## Скриншоты
 
-| Бот | Админка |
-|-----|---------|
-| ![Главное меню бота](docs/screenshots/bot-start.png) | ![Дашборд](docs/screenshots/admin-dashboard.png) |
-| ![Каталог услуг](docs/screenshots/bot-catalog.png) | ![Список заявок](docs/screenshots/admin-orders.png) |
-| ![Оформление заявки](docs/screenshots/bot-order.png) | ![Карточка пользователя](docs/screenshots/admin-user.png) |
+Пока не сняты. Что и в каком порядке снимать — в
+[docs/screenshots/README.md](docs/screenshots/README.md).
 
 ## Что умеет
 
@@ -171,8 +189,8 @@ docker compose logs -f queue
 и добавьте его в `.env`:
 
 ```dotenv
-TELEGRAM_TOKEN=123456789:AAH...
-TELEGRAM_BOT_USERNAME=your_demo_bot
+TELEGRAM_TOKEN=123456789:AAH...            # токен, который выдал BotFather
+TELEGRAM_BOT_USERNAME=имя_вашего_бота      # без @, используется только для ссылок
 ```
 
 Токен хранится только в `.env` — в репозиторий он не попадает.
