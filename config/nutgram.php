@@ -22,5 +22,5 @@ return [
     'namespace' => app_path('Telegram'),
 
     // Set log channel
-    'log_channel' => env('TELEGRAM_LOG_CHANNEL', 'stack'),
+    'log_channel' => env('TELEGRAM_LOG_CHANNEL', 'null'),
 ];

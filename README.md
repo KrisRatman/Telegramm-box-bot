@@ -104,10 +104,22 @@ php artisan queue:work
 
 Админка: <http://localhost:8000/admin>
 
-> **OSPanel.** PHP из OSPanel уже содержит `intl`, поэтому artisan удобно запускать
-> через него: `C:\OSPanel\modules\PHP-8.4\php.exe artisan ...`. MySQL в OSPanel слушает
-> не на `127.0.0.1`, а на собственном loopback-адресе — точный IP показан в окне OSPanel,
-> его и пишем в `DB_HOST`.
+### Запуск в OSPanel (Windows)
+
+Положите проект в `C:\OSPanel\home\` — конфиг домена `.osp/project.ini` уже в репозитории,
+он указывает Apache на `public` и подключает PHP 8.4 и MySQL 8.4. Перезапустите
+Open Server Panel, чтобы она перечитала список проектов, и сайт откроется
+на <http://02-telegram-bot-admin/admin> (HTTPS тоже работает — OSPanel сам выпускает
+сертификат на домен).
+
+Две детали, на которых легко споткнуться:
+
+- Скорее всего `php` в PATH — это не PHP из OSPanel. Filament требует расширение `intl`,
+  поэтому artisan и composer запускайте явно:
+  `C:\OSPanel\modules\PHP-8.4\php.exe artisan ...`
+- MySQL слушает не на `127.0.0.1`, а на собственном loopback-адресе модуля
+  (например `127.0.1.28`). Точный IP показан в окне OSPanel и в `hosts`; его и пишем
+  в `DB_HOST`. Либо используйте имя хоста, которое OSPanel прописывает сам: `mysql-8.4`.
 
 ## Настройка бота и webhook
 
