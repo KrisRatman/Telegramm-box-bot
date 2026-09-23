@@ -11,8 +11,13 @@
 
 ## Как посмотреть
 
-Публичный демо-стенд пока не развёрнут, поэтому самый быстрый способ —
-поднять проект локально одной командой:
+**Живой демо-бот:** [@LaravelsBot](https://t.me/LaravelsBot) — нажмите `/start`,
+оформите заявку в чате или откройте каталог и корзину кнопкой меню слева
+от поля ввода (Mini App). Бот развёрнут на виртуальном хостинге так, как описано
+в разделе [Установка на виртуальный хостинг](#установка-на-виртуальный-хостинг-beget-и-аналоги).
+
+Админку демо-стенда можно посмотреть по запросу. Чтобы изучить её самостоятельно,
+поднимите проект локально одной командой:
 
 ```bash
 cp .env.example .env
@@ -98,7 +103,7 @@ docker compose exec app php artisan db:seed --class=DemoSeeder
 
 ### Требования
 
-- PHP 8.2+ с расширениями `intl`, `pdo_mysql`, `mbstring`, `curl`, `openssl`, `zip`
+- PHP 8.3+ с расширениями `intl`, `pdo_mysql`, `mbstring`, `curl`, `openssl`, `zip`
 - Composer 2
 - MySQL 8 или MariaDB 10.6+
 
@@ -204,6 +209,93 @@ docker compose logs -f queue
 Переменные `compose.yaml` берёт из `.env` проекта, поэтому токен бота в
 репозиторий не попадает. `DB_HOST` внутри сети Docker всегда `mysql` — значение
 из вашего `.env` перекрывается, локальная база OSPanel не задействована.
+
+### Установка на виртуальный хостинг (Beget и аналоги)
+
+Демо-бот работает на обычном виртуальном хостинге с SSH, без VPS и Docker.
+Пример ниже — для Beget; у других хостингов отличаются только пути и названия
+разделов панели.
+
+**1. Панель хостинга.** Создайте базу MySQL, у сайта выберите PHP 8.4, включите SSH.
+
+**2. Код и зависимости.** На Beget PHP вызывается как `php8.4`, а встроенный
+Composer — версии 1, поэтому ставим Composer 2 в домашнюю папку:
+
+```bash
+mkdir -p ~/bin && cd ~/bin
+php8.4 -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+php8.4 composer-setup.php --install-dir=$HOME/bin --filename=composer.phar && rm composer-setup.php
+
+cd ~/site.example
+git clone <repo> laravel && cd laravel
+php8.4 ~/bin/composer.phar install --no-dev --optimize-autoloader
+```
+
+**3. Фронтенд.** На хостинге обычно нет Node.js: соберите фронт локально
+(`npm run build`) и загрузите папку `public/build` на сервер.
+
+**4. `.env`.** Скопируйте `.env.example`, выставьте `APP_ENV=production`,
+`APP_DEBUG=false`, доступы к базе (`DB_HOST=localhost`), токен бота и
+`TELEGRAM_ADMIN_CHAT_IDS`, затем:
+
+```bash
+php8.4 artisan key:generate
+php8.4 artisan migrate --seed --force
+php8.4 artisan storage:link
+php8.4 artisan optimize
+```
+
+**5. Корень сайта.** Сайт должен смотреть в `public/`. Если в панели нельзя
+сменить корень, замените папку сайта символической ссылкой:
+
+```bash
+cd ~/site.example && mv public_html public_html.bak && ln -s laravel/public public_html
+```
+
+**6. Очередь.** Постоянный воркер на виртуальном хостинге держать нельзя, поэтому
+в панели в разделе «CRON» добавьте задачу на каждую минуту. Планировщик сам
+запустит `queue:work`, который разберёт рассылки и завершится:
+
+```bash
+/usr/local/bin/php8.4 /home/<путь-к-проекту>/artisan schedule:run >> /dev/null 2>&1
+```
+
+**7. HTTPS.** Webhook и Mini App работают только по HTTPS. Если на сайт можно
+выпустить бесплатный сертификат Let's Encrypt — пропишите `https://` адрес в `APP_URL`.
+На технический адрес хостинга (например, `*.beget.tech`) сертификат не выпускается —
+тогда бесплатный HTTPS даёт [Cloudflare Worker](https://workers.cloudflare.com)
+с адресом `*.workers.dev`, который пересылает запросы на сайт по HTTP:
+
+```js
+export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+    url.protocol = 'http:';
+    url.hostname = 'site.example';
+    url.port = '';
+
+    return fetch(new Request(url, request), { redirect: 'manual' });
+  },
+};
+```
+
+Адрес Worker прописывается в `APP_URL` и `TELEGRAM_MINI_APP_URL`. Если `APP_URL`
+начинается с `https://`, приложение строит все ссылки от него, поэтому админка
+и Mini App за прокси работают без доверия к заголовкам `X-Forwarded-*`.
+
+**8. Бот.** После `php8.4 artisan config:cache` установите webhook, меню команд
+и кнопку Mini App:
+
+```bash
+php8.4 artisan telegram:webhook set
+php8.4 artisan telegram:commands
+php8.4 artisan telegram:menu-button set
+php8.4 artisan telegram:webhook info    # «Последняя ошибка» должна быть пустой
+```
+
+Обновление кода на сервере: `git pull`, при изменении зависимостей —
+`composer install --no-dev`, затем `php8.4 artisan migrate --force && php8.4 artisan optimize`.
+Фронтенд после правок снова собирается локально и загружается в `public/build`.
 
 ## Настройка бота и webhook
 
@@ -558,6 +650,7 @@ php artisan test
 - команды `telegram:webhook` и `telegram:commands` для каждого активного бота и языка
 - языки: английский клиент, выбор через `/language`, язык бота по умолчанию, перевод каталога с откатом на русский, статус из админки на языке клиента, уведомление админу на русском
 - раздел «Боты» в админке: создание, обязательный токен, токен не затирается пустым полем и не выводится на страницу
+- ссылки от https-адреса `APP_URL`, когда сайт открыт через прокси
 
 Тесты не ходят в Telegram: пакет подменяет клиент на `Nutgram::fake()`,
 исходящие запросы проверяются ассертами.
