@@ -4,8 +4,10 @@ namespace Database\Seeders;
 
 use App\Enums\MessageDirection;
 use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
 use App\Models\BotMessage;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Service;
 use App\Models\TelegramUser;
 use Illuminate\Database\Seeder;
@@ -16,6 +18,8 @@ use Illuminate\Database\Seeder;
  */
 class DemoSeeder extends Seeder
 {
+    private int $payableOrders = 0;
+
     public function run(): void
     {
         $services = Service::query()->active()->get();
@@ -61,7 +65,7 @@ class DemoSeeder extends Seeder
                 $service = $services->random();
                 $status = $statuses[($index + $orderIndex) % count($statuses)];
 
-                Order::create([
+                $order = Order::create([
                     'telegram_user_id' => $user->id,
                     'service_id' => $service->id,
                     'service_name' => $service->name,
@@ -74,7 +78,50 @@ class DemoSeeder extends Seeder
                     'created_at' => now()->subDays($index)->subHours($orderIndex),
                     'updated_at' => now()->subDays($index),
                 ]);
+
+                $this->seedPayment($order);
             }
+        }
+    }
+
+    /**
+     * Часть подтверждённых и выполненных заявок оплачена в боте,
+     * одна — с возвратом, чтобы в админке были все состояния платежа.
+     */
+    private function seedPayment(Order $order): void
+    {
+        $payable = in_array($order->status, [OrderStatus::Confirmed, OrderStatus::InProgress, OrderStatus::Completed], true);
+
+        if (! $payable) {
+            return;
+        }
+
+        // Каждая четвёртая подходящая заявка остаётся неоплаченной, третья — с возвратом.
+        $position = ++$this->payableOrders;
+
+        if ($position % 4 === 0) {
+            return;
+        }
+
+        $paidAt = $order->created_at->copy()->addHour();
+        $refunded = $position === 3;
+
+        // forceCreate — чтобы сохранились исторические created_at и updated_at.
+        Payment::query()->forceCreate([
+            'order_id' => $order->id,
+            'status' => $refunded ? PaymentStatus::Refunded : PaymentStatus::Paid,
+            'amount' => $order->price,
+            'currency' => 'RUB',
+            'telegram_payment_charge_id' => 'demo_tg_'.$order->id,
+            'provider_payment_charge_id' => 'demo-'.str_pad((string) $order->id, 8, '0', STR_PAD_LEFT),
+            'paid_at' => $paidAt,
+            'refunded_at' => $refunded ? $paidAt->copy()->addDay() : null,
+            'created_at' => $order->created_at,
+            'updated_at' => $paidAt,
+        ]);
+
+        if (! $refunded) {
+            $order->forceFill(['paid_at' => $paidAt])->saveQuietly();
         }
     }
 }

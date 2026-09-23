@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[ObservedBy(OrderObserver::class)]
 class Order extends Model
@@ -28,6 +29,7 @@ class Order extends Model
         'comment',
         'admin_note',
         'completed_at',
+        'paid_at',
     ];
 
     protected function casts(): array
@@ -36,6 +38,7 @@ class Order extends Model
             'status' => OrderStatus::class,
             'price' => 'decimal:2',
             'completed_at' => 'datetime',
+            'paid_at' => 'datetime',
         ];
     }
 
@@ -74,6 +77,28 @@ class Order extends Model
     public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class);
+    }
+
+    /** @return HasMany<Payment, $this> */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->paid_at !== null;
+    }
+
+    /**
+     * Счёт выставляем только на неоплаченную заявку с ценой. Выполненную
+     * тоже можно оплатить — бывает, что клиент платит после работы.
+     */
+    public function canBePaid(): bool
+    {
+        return ! $this->isPaid()
+            && (float) $this->price > 0
+            && $this->status !== OrderStatus::Cancelled;
     }
 
     public function getFormattedPriceAttribute(): string

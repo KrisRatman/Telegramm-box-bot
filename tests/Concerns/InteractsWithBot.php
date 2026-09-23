@@ -53,6 +53,21 @@ trait InteractsWithBot
     }
 
     /**
+     * Тела всех запросов к указанному методу Bot API за последний апдейт.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function requestsTo(Nutgram $bot, string $method): array
+    {
+        return collect($bot->getRequestHistory())
+            ->map(fn (array $reqRes) => array_values($reqRes)[0])
+            ->filter(fn (Request $request) => $request->getUri()->getPath() === $method)
+            ->map(fn (Request $request) => $this->payload($request))
+            ->values()
+            ->all();
+    }
+
+    /**
      * Подписи инлайн-кнопок из ответа бота.
      *
      * @return array<int, string>

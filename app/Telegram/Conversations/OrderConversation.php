@@ -163,7 +163,7 @@ class OrderConversation extends Conversation
         $bot->editMessageText(
             text: Texts::orderCreated($order),
             parse_mode: ParseMode::HTML,
-            reply_markup: Keyboards::backToMenu(),
+            reply_markup: Keyboards::orderCreated($order),
         );
 
         $this->end();

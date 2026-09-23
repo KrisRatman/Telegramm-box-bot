@@ -20,6 +20,6 @@ class OrdersHandler
 
         $text = $orders->isEmpty() ? Texts::noOrders() : Texts::orders($orders);
 
-        Screen::show($bot, $text, Keyboards::backToMenu());
+        Screen::show($bot, $text, Keyboards::myOrders($orders));
     }
 }

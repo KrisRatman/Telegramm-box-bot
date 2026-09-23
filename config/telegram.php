@@ -40,4 +40,25 @@ return [
         'chunk_size' => (int) env('TELEGRAM_BROADCAST_CHUNK', 25),
         'delay_ms' => (int) env('TELEGRAM_BROADCAST_DELAY_MS', 40),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Оплата (Telegram Payments)
+    |--------------------------------------------------------------------------
+    | provider_token выдаёт @BotFather → Payments после подключения провайдера
+    | (ЮKassa и др.). Пока токена нет, кнопки оплаты в боте и админке скрыты.
+    |
+    | receipt — чек по 54-ФЗ через провайдера. Включать, когда в ЮKassa
+    | подключена онлайн-касса: бот тогда спрашивает у клиента телефон
+    | и передаёт его провайдеру вместе с позицией чека.
+    */
+    'payments' => [
+        'provider_token' => env('TELEGRAM_PAYMENT_PROVIDER_TOKEN'),
+        'currency' => env('TELEGRAM_PAYMENT_CURRENCY', 'RUB'),
+        'receipt' => [
+            'enabled' => (bool) env('TELEGRAM_PAYMENT_RECEIPT', false),
+            // Код ставки НДС ЮKassa: 1 — без НДС, 4 — 20% и т.д.
+            'vat_code' => (int) env('TELEGRAM_PAYMENT_VAT_CODE', 1),
+        ],
+    ],
 ];

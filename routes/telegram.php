@@ -7,6 +7,7 @@ use App\Telegram\Conversations\OrderConversation;
 use App\Telegram\Handlers\CatalogHandler;
 use App\Telegram\Handlers\MenuHandler;
 use App\Telegram\Handlers\OrdersHandler;
+use App\Telegram\Handlers\PaymentHandler;
 use App\Telegram\Middleware\TrackTelegramUser;
 use App\Telegram\Support\Texts;
 use SergiX44\Nutgram\Nutgram;
@@ -50,6 +51,17 @@ $bot->onCallbackQueryData('orders:my', [OrdersHandler::class, 'my']);
 $bot->onCallbackQueryData('order:create:{serviceId}', function (Nutgram $bot, string $serviceId) {
     OrderConversation::begin($bot, data: ['serviceId' => (int) $serviceId]);
 });
+
+// --- Оплата ----------------------------------------------------------------
+
+$bot->onCallbackQueryData('payment:order:{orderId}', [PaymentHandler::class, 'pay']);
+
+$bot->onPreCheckoutQuery([PaymentHandler::class, 'preCheckout']);
+
+// Списание нельзя потерять: если клиент в этот момент оформляет новую заявку,
+// без willStopConversations апдейт ушёл бы в шаг диалога вместо обработчика.
+$bot->onSuccessfulPayment([PaymentHandler::class, 'successful'])
+    ->willStopConversations();
 
 // --- Фолбэк ----------------------------------------------------------------
 

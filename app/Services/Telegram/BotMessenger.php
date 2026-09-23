@@ -31,39 +31,40 @@ class BotMessenger
         ?User $author = null,
         ?Broadcast $broadcast = null,
     ): bool {
-        try {
-            $message = $this->bot->sendMessage(
-                text: $text,
-                chat_id: $user->chat_id,
-                parse_mode: ParseMode::HTML,
-            );
-        } catch (TelegramException $e) {
-            // 403 — пользователь заблокировал бота, больше ему не пишем.
-            if ($this->isBlockedError($e)) {
-                $user->forceFill(['is_blocked' => true])->save();
-            } else {
-                Log::warning('Не удалось отправить сообщение в Telegram', [
-                    'chat_id' => $user->chat_id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
+        $message = $this->deliver($user, fn () => $this->bot->sendMessage(
+            text: $text,
+            chat_id: $user->chat_id,
+            parse_mode: ParseMode::HTML,
+        ));
 
+        if ($message === false) {
             return false;
-        } catch (Throwable $e) {
-            Log::error('Сбой при отправке сообщения в Telegram', [
-                'chat_id' => $user->chat_id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return false;
-        }
-
-        // Успешная доставка снимает отметку о блокировке.
-        if ($user->is_blocked) {
-            $user->forceFill(['is_blocked' => false])->save();
         }
 
         $this->log($user, MessageDirection::Out, $text, $message?->message_id, $author, $broadcast);
+
+        return true;
+    }
+
+    /**
+     * Счёт на оплату. Сам счёт — не текст, поэтому в историю переписки
+     * пишем короткую отметку $logText, чтобы админ видел, когда его выставили.
+     *
+     * @param  array<string, mixed>  $invoice  Аргументы sendInvoice без chat_id.
+     * @return bool Доставлен ли счёт.
+     */
+    public function sendInvoice(TelegramUser $user, array $invoice, string $logText, ?User $author = null): bool
+    {
+        $message = $this->deliver($user, fn () => $this->bot->sendInvoice(
+            ...$invoice,
+            chat_id: $user->chat_id,
+        ));
+
+        if ($message === false) {
+            return false;
+        }
+
+        $this->log($user, MessageDirection::Out, $logText, $message?->message_id, $author);
 
         return true;
     }
@@ -105,6 +106,46 @@ class BotMessenger
             'user_id' => $author?->id,
             'broadcast_id' => $broadcast?->id,
         ]);
+    }
+
+    /**
+     * Общая обработка ошибок доставки: 403 помечает пользователя
+     * заблокировавшим бота, успешная доставка снимает отметку.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $send
+     * @return T|false
+     */
+    private function deliver(TelegramUser $user, callable $send): mixed
+    {
+        try {
+            $result = $send();
+        } catch (TelegramException $e) {
+            if ($this->isBlockedError($e)) {
+                $user->forceFill(['is_blocked' => true])->save();
+            } else {
+                Log::warning('Не удалось отправить сообщение в Telegram', [
+                    'chat_id' => $user->chat_id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            return false;
+        } catch (Throwable $e) {
+            Log::error('Сбой при отправке сообщения в Telegram', [
+                'chat_id' => $user->chat_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+
+        if ($user->is_blocked) {
+            $user->forceFill(['is_blocked' => false])->save();
+        }
+
+        return $result;
     }
 
     private function isBlockedError(TelegramException $e): bool

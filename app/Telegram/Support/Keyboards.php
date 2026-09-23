@@ -2,8 +2,10 @@
 
 namespace App\Telegram\Support;
 
+use App\Models\Order;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use App\Services\PaymentService;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\KeyboardButton;
@@ -67,6 +69,40 @@ class Keyboards
             ->addRow(self::backButton("catalog:category:{$service->service_category_id}"));
     }
 
+    /**
+     * Экран после оформления: сразу предлагаем оплатить.
+     */
+    public static function orderCreated(Order $order): InlineKeyboardMarkup
+    {
+        $keyboard = InlineKeyboardMarkup::make();
+
+        if (PaymentService::enabled() && $order->canBePaid()) {
+            $keyboard->addRow(self::payButton($order, "💳 Оплатить {$order->formatted_price}"));
+        }
+
+        return $keyboard->addRow(self::backButton('menu:main'));
+    }
+
+    /**
+     * «Мои заявки»: кнопка оплаты у каждой неоплаченной заявки.
+     *
+     * @param  iterable<Order>  $orders
+     */
+    public static function myOrders(iterable $orders): InlineKeyboardMarkup
+    {
+        $keyboard = InlineKeyboardMarkup::make();
+
+        if (PaymentService::enabled()) {
+            foreach ($orders as $order) {
+                if ($order->canBePaid()) {
+                    $keyboard->addRow(self::payButton($order, "💳 Оплатить №{$order->number}"));
+                }
+            }
+        }
+
+        return $keyboard->addRow(self::backButton('menu:main'));
+    }
+
     public static function backToMenu(): InlineKeyboardMarkup
     {
         return InlineKeyboardMarkup::make()->addRow(self::backButton('menu:main'));
@@ -98,6 +134,11 @@ class Keyboards
     public static function removeReplyKeyboard(): ReplyKeyboardRemove
     {
         return ReplyKeyboardRemove::make(true);
+    }
+
+    public static function payButton(Order $order, string $label): InlineKeyboardButton
+    {
+        return InlineKeyboardButton::make($label, callback_data: "payment:order:{$order->id}");
     }
 
     public static function backButton(string $callbackData): InlineKeyboardButton

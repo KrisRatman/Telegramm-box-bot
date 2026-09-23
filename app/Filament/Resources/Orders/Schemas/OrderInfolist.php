@@ -24,6 +24,10 @@ class OrderInfolist
                             ->label('Выполнена')
                             ->dateTime('d.m.Y H:i')
                             ->placeholder('—'),
+                        TextEntry::make('paid_at')
+                            ->label('Оплачена')
+                            ->dateTime('d.m.Y H:i')
+                            ->placeholder('Не оплачена'),
                     ]),
                 Section::make('Клиент')
                     ->columns(3)

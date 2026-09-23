@@ -7,9 +7,11 @@ use App\Filament\Actions\ChangeOrderStatusAction;
 use App\Filament\Actions\ReplyToTelegramUserAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -57,6 +59,12 @@ class OrdersTable
                     ->label('Статус')
                     ->badge()
                     ->sortable(),
+                IconColumn::make('paid_at')
+                    ->label('Оплата')
+                    ->state(fn ($record) => $record->isPaid())
+                    ->boolean()
+                    ->tooltip(fn ($record) => $record->paid_at?->format('d.m.Y H:i'))
+                    ->sortable(),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -67,6 +75,14 @@ class OrdersTable
                     ->label('Только новые')
                     ->query(fn (Builder $query) => $query->where('status', OrderStatus::New))
                     ->toggle(),
+                TernaryFilter::make('paid')
+                    ->label('Оплата')
+                    ->trueLabel('Оплаченные')
+                    ->falseLabel('Не оплаченные')
+                    ->queries(
+                        true: fn (Builder $query) => $query->whereNotNull('paid_at'),
+                        false: fn (Builder $query) => $query->whereNull('paid_at'),
+                    ),
             ])
             ->recordActions([
                 ChangeOrderStatusAction::make(),
