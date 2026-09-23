@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\Service;
@@ -27,7 +28,7 @@ class OrderService
         string $contactPhone,
         ?string $comment = null,
     ): Order {
-        return $this->create($user, collect([['service' => $service, 'quantity' => 1]]), $contactName, $contactPhone, $comment);
+        return $this->create($user, collect([['service' => $service, 'quantity' => 1]]), OrderSource::Bot, $contactName, $contactPhone, $comment);
     }
 
     /**
@@ -57,7 +58,7 @@ class OrderService
             'quantity' => $quantities[$service->id],
         ]);
 
-        $order = $this->create($user, $lines, $contactName, $contactPhone, $comment);
+        $order = $this->create($user, $lines, OrderSource::MiniApp, $contactName, $contactPhone, $comment);
 
         // Клиент оформлял заявку в Mini App — подтверждение дублируем в чат,
         // чтобы номер и состав остались в переписке.
@@ -72,11 +73,12 @@ class OrderService
     private function create(
         TelegramUser $user,
         Collection $lines,
+        OrderSource $source,
         string $contactName,
         string $contactPhone,
         ?string $comment,
     ): Order {
-        $order = DB::transaction(function () use ($user, $lines, $contactName, $contactPhone, $comment) {
+        $order = DB::transaction(function () use ($user, $lines, $source, $contactName, $contactPhone, $comment) {
             $first = $lines->first()['service'];
 
             $order = Order::create([
@@ -86,6 +88,7 @@ class OrderService
                 'service_name' => $this->summary($lines),
                 'price' => $lines->sum(fn (array $line) => (float) $line['service']->price * $line['quantity']),
                 'status' => OrderStatus::New,
+                'source' => $source,
                 'contact_name' => $contactName,
                 'contact_phone' => $contactPhone,
                 'comment' => $comment,

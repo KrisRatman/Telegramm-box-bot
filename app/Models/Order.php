@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Observers\OrderObserver;
 use Database\Factories\OrderFactory;
@@ -24,6 +25,7 @@ class Order extends Model
         'service_name',
         'price',
         'status',
+        'source',
         'contact_name',
         'contact_phone',
         'comment',
@@ -32,10 +34,16 @@ class Order extends Model
         'paid_at',
     ];
 
+    /** Совпадает с default в миграции: так source есть и у ещё не сохранённой заявки. */
+    protected $attributes = [
+        'source' => 'bot',
+    ];
+
     protected function casts(): array
     {
         return [
             'status' => OrderStatus::class,
+            'source' => OrderSource::class,
             'price' => 'decimal:2',
             'completed_at' => 'datetime',
             'paid_at' => 'datetime',

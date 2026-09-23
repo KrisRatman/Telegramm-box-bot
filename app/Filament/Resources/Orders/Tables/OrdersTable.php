@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Tables;
 
+use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Filament\Actions\ChangeOrderStatusAction;
 use App\Filament\Actions\ReplyToTelegramUserAction;
@@ -47,6 +48,10 @@ class OrdersTable
                     ->label('Услуга')
                     ->searchable()
                     ->wrap(),
+                TextColumn::make('source')
+                    ->label('Канал')
+                    ->badge()
+                    ->toggleable(),
                 TextColumn::make('price')
                     ->label('Стоимость')
                     ->money('RUB')
@@ -71,6 +76,9 @@ class OrdersTable
                     ->label('Статус')
                     ->options(OrderStatus::class)
                     ->multiple(),
+                SelectFilter::make('source')
+                    ->label('Канал')
+                    ->options(OrderSource::class),
                 Filter::make('new_only')
                     ->label('Только новые')
                     ->query(fn (Builder $query) => $query->where('status', OrderStatus::New))

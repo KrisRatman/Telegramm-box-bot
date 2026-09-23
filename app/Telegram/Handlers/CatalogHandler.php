@@ -2,8 +2,12 @@
 
 namespace App\Telegram\Handlers;
 
+use App\Enums\BotEventType;
+use App\Enums\OrderSource;
+use App\Models\BotEvent;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use App\Telegram\Support\BotContext;
 use App\Telegram\Support\Keyboards;
 use App\Telegram\Support\Screen;
 use App\Telegram\Support\Texts;
@@ -25,6 +29,8 @@ class CatalogHandler
 
             return;
         }
+
+        BotEvent::record(BotContext::user($bot), BotEventType::CatalogViewed, OrderSource::Bot);
 
         Screen::show($bot, Texts::categories(), Keyboards::categories($categories));
     }

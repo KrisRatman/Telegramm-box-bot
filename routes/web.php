@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\MiniApp\EventController;
 use App\Http\Controllers\MiniApp\MiniAppController;
 use App\Http\Controllers\MiniApp\OrderController;
 use App\Http\Controllers\MiniApp\ProfileController;
@@ -24,4 +25,5 @@ Route::prefix('app/api')
     ->group(function () {
         Route::get('/profile', ProfileController::class)->name('profile');
         Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+        Route::post('/events', [EventController::class, 'store'])->name('events.store');
     });

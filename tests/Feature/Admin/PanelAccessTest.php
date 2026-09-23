@@ -49,6 +49,7 @@ class PanelAccessTest extends TestCase
             'услуги' => ['/admin/services'],
             'категории' => ['/admin/service-categories'],
             'рассылки' => ['/admin/broadcasts'],
+            'аналитика' => ['/admin/analytics'],
         ];
     }
 

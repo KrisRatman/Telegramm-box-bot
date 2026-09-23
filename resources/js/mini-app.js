@@ -65,6 +65,7 @@ Alpine.data('miniApp', ({ catalog }) => ({
     order: null,
     paid: false,
     insideTelegram: Boolean(tg?.initData),
+    orderStartTracked: false,
 
     init() {
         // Услуги, которые убрали из каталога, из сохранённой корзины выбрасываем.
@@ -86,6 +87,7 @@ Alpine.data('miniApp', ({ catalog }) => ({
 
         this.syncTelegramButtons();
         this.loadProfile();
+        this.track('catalog_viewed');
     },
 
     get services() {
@@ -141,6 +143,11 @@ Alpine.data('miniApp', ({ catalog }) => ({
         if (this.cartCount > 0) {
             this.screen = 'cart';
             window.scrollTo({ top: 0 });
+
+            if (!this.orderStartTracked) {
+                this.orderStartTracked = true;
+                this.track('order_started');
+            }
         }
     },
 
@@ -194,6 +201,16 @@ Alpine.data('miniApp', ({ catalog }) => ({
             tg.BackButton.show();
         } else {
             tg.BackButton.hide();
+        }
+    },
+
+    /*
+     * Шаг воронки для аналитики в админке. Ответ не ждём и ошибки
+     * глотаем: статистика не должна мешать оформлению заявки.
+     */
+    track(type) {
+        if (this.insideTelegram) {
+            api('POST', '/app/api/events', { type }).catch(() => {});
         }
     },
 

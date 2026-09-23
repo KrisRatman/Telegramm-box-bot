@@ -39,6 +39,12 @@ class TelegramUser extends Model
         return $this->hasMany(Order::class);
     }
 
+    /** @return HasMany<BotEvent, $this> */
+    public function events(): HasMany
+    {
+        return $this->hasMany(BotEvent::class);
+    }
+
     /** @return HasMany<BotMessage, $this> */
     public function messages(): HasMany
     {

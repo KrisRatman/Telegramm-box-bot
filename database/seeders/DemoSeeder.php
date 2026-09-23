@@ -2,9 +2,12 @@
 
 namespace Database\Seeders;
 
+use App\Enums\BotEventType;
 use App\Enums\MessageDirection;
+use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
+use App\Models\BotEvent;
 use App\Models\BotMessage;
 use App\Models\Order;
 use App\Models\Payment;
@@ -12,6 +15,9 @@ use App\Models\Service;
 use App\Models\TelegramUser;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
+use Random\Engine\Mt19937;
+use Random\Randomizer;
 
 /**
  * Демо-данные для скриншотов и показа админки заказчику.
@@ -94,6 +100,113 @@ class DemoSeeder extends Seeder
                 $this->seedCartOrder($user, $services->take(3), $phone);
             }
         }
+
+        $this->seedFunnelHistory($services);
+    }
+
+    /**
+     * История за 30 дней для страницы «Аналитика»: пользователи приходят
+     * каждый день и отсеиваются на шагах воронки. Генератор с фиксированным
+     * зерном — графики на скриншотах не меняются от запуска к запуску.
+     *
+     * @param  Collection<int, Service>  $services
+     */
+    private function seedFunnelHistory(Collection $services): void
+    {
+        // Повторный запуск сидера историю не дублирует.
+        if (TelegramUser::query()->where('chat_id', 710000000)->exists()) {
+            return;
+        }
+
+        $random = new Randomizer(new Mt19937(2026));
+        $chance = fn (int $percent): bool => $random->getInt(1, 100) <= $percent;
+        $names = ['Алексей', 'Екатерина', 'Никита', 'Юлия', 'Артём', 'Полина', 'Игорь', 'Светлана', 'Максим', 'Дарья'];
+
+        foreach (range(0, 59) as $i) {
+            $cameAt = now()->subDays($random->getInt(0, 29))->setTime($random->getInt(9, 21), $random->getInt(0, 59));
+            $source = $chance(45) ? OrderSource::MiniApp : OrderSource::Bot;
+            $name = $names[$i % count($names)];
+
+            $user = TelegramUser::query()->forceCreate([
+                'chat_id' => 710000000 + $i,
+                'first_name' => $name,
+                'language_code' => 'ru',
+                'is_blocked' => false,
+                'last_activity_at' => $cameAt->copy()->addMinutes(20),
+                'created_at' => $cameAt,
+                'updated_at' => $cameAt,
+            ]);
+
+            // Отсев на шагах: 80 % смотрят каталог, из них 55 % начинают
+            // оформление, из них 65 % оставляют заявку, половина оплачивает.
+            if (! $chance(80)) {
+                continue;
+            }
+
+            $this->seedEvent($user, BotEventType::CatalogViewed, $source, $cameAt->copy()->addMinute());
+
+            if (! $chance(55)) {
+                continue;
+            }
+
+            $this->seedEvent($user, BotEventType::OrderStarted, $source, $cameAt->copy()->addMinutes(5));
+
+            if (! $chance(65)) {
+                continue;
+            }
+
+            $service = $services[$random->getInt(0, $services->count() - 1)];
+            $orderedAt = $cameAt->copy()->addMinutes(10);
+
+            $order = Order::query()->forceCreate([
+                'number' => Order::generateNumber(),
+                'telegram_user_id' => $user->id,
+                'service_id' => $service->id,
+                'service_name' => $service->name,
+                'price' => $service->price,
+                'status' => OrderStatus::Confirmed,
+                'source' => $source,
+                'contact_name' => $name,
+                'contact_phone' => '+7900'.str_pad((string) (1000000 + $i), 7, '0', STR_PAD_LEFT),
+                'created_at' => $orderedAt,
+                'updated_at' => $orderedAt,
+            ]);
+
+            $order->items()->create([
+                'service_id' => $service->id,
+                'service_name' => $service->name,
+                'price' => $service->price,
+                'quantity' => 1,
+            ]);
+
+            if ($chance(50)) {
+                $paidAt = $orderedAt->copy()->addMinutes(3);
+
+                Payment::query()->forceCreate([
+                    'order_id' => $order->id,
+                    'status' => PaymentStatus::Paid,
+                    'amount' => $order->price,
+                    'currency' => 'RUB',
+                    'telegram_payment_charge_id' => 'demo_tg_'.$order->id,
+                    'provider_payment_charge_id' => 'demo-'.str_pad((string) $order->id, 8, '0', STR_PAD_LEFT),
+                    'paid_at' => $paidAt,
+                    'created_at' => $orderedAt,
+                    'updated_at' => $paidAt,
+                ]);
+
+                $order->forceFill(['paid_at' => $paidAt])->saveQuietly();
+            }
+        }
+    }
+
+    private function seedEvent(TelegramUser $user, BotEventType $type, OrderSource $source, Carbon $at): void
+    {
+        BotEvent::query()->forceCreate([
+            'telegram_user_id' => $user->id,
+            'type' => $type,
+            'source' => $source,
+            'created_at' => $at,
+        ]);
     }
 
     /**
@@ -111,6 +224,7 @@ class DemoSeeder extends Seeder
             'service_name' => $services->first()->name.' и ещё '.($services->count() - 1),
             'price' => $services->sum(fn (Service $service) => (float) $service->price * $quantities[$service->id]),
             'status' => OrderStatus::New,
+            'source' => OrderSource::MiniApp,
             'contact_name' => $user->first_name,
             'contact_phone' => $phone,
             'comment' => 'Оформлено через Mini App.',

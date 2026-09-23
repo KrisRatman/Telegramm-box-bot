@@ -2,6 +2,9 @@
 
 namespace App\Telegram\Conversations;
 
+use App\Enums\BotEventType;
+use App\Enums\OrderSource;
+use App\Models\BotEvent;
 use App\Models\Service;
 use App\Services\OrderService;
 use App\Telegram\Support\BotContext;
@@ -37,6 +40,8 @@ class OrderConversation extends Conversation
         }
 
         $this->serviceId = $service->id;
+
+        BotEvent::record(BotContext::user($bot), BotEventType::OrderStarted, OrderSource::Bot);
 
         $bot->answerCallbackQuery();
         $bot->sendMessage(
