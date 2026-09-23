@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Service;
 use App\Models\TelegramUser;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
 
 /**
@@ -79,8 +80,49 @@ class DemoSeeder extends Seeder
                     'updated_at' => now()->subDays($index),
                 ]);
 
+                $order->items()->create([
+                    'service_id' => $service->id,
+                    'service_name' => $service->name,
+                    'price' => $service->price,
+                    'quantity' => 1,
+                ]);
+
                 $this->seedPayment($order);
             }
+
+            if ($index === 0) {
+                $this->seedCartOrder($user, $services->take(3), $phone);
+            }
+        }
+    }
+
+    /**
+     * Заявка из корзины Mini App: несколько услуг в одной заявке.
+     *
+     * @param  Collection<int, Service>  $services
+     */
+    private function seedCartOrder(TelegramUser $user, Collection $services, string $phone): void
+    {
+        $quantities = $services->values()->mapWithKeys(fn (Service $service, int $i) => [$service->id => $i === 0 ? 2 : 1]);
+
+        $order = Order::create([
+            'telegram_user_id' => $user->id,
+            'service_id' => null,
+            'service_name' => $services->first()->name.' и ещё '.($services->count() - 1),
+            'price' => $services->sum(fn (Service $service) => (float) $service->price * $quantities[$service->id]),
+            'status' => OrderStatus::New,
+            'contact_name' => $user->first_name,
+            'contact_phone' => $phone,
+            'comment' => 'Оформлено через Mini App.',
+        ]);
+
+        foreach ($services as $service) {
+            $order->items()->create([
+                'service_id' => $service->id,
+                'service_name' => $service->name,
+                'price' => $service->price,
+                'quantity' => $quantities[$service->id],
+            ]);
         }
     }
 

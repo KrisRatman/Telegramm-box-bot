@@ -53,6 +53,16 @@ class Service extends Model
         $query->where('is_active', true);
     }
 
+    /**
+     * Услуга видна клиенту: активна сама и лежит в активной категории.
+     *
+     * @param  Builder<Service>  $query
+     */
+    public function scopeOrderable(Builder $query): void
+    {
+        $query->active()->whereHas('category', fn (Builder $category) => $category->where('is_active', true));
+    }
+
     public function getFormattedPriceAttribute(): string
     {
         return number_format((float) $this->price, 0, ',', ' ').' ₽';

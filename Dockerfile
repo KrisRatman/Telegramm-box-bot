@@ -1,6 +1,20 @@
 # Образ приложения: FrankenPHP отдаёт public/ напрямую, без связки nginx + php-fpm.
 # Один и тот же образ поднимает три роли — веб, воркер очереди и бота;
 # что именно запускать, решает аргумент команды (см. compose.yaml).
+
+# Фронт Mini App собирается отдельно: Node нужен только на этапе сборки,
+# в итоговый образ попадает лишь готовый public/build.
+FROM node:24-alpine AS assets
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY vite.config.js ./
+COPY resources ./resources
+RUN npm run build
+
 FROM dunglas/frankenphp:php8.4
 
 # intl нужен Filament, pdo_mysql — базе, pcntl — корректной остановке queue:work.
@@ -46,6 +60,7 @@ RUN composer install \
         --no-autoloader
 
 COPY . .
+COPY --from=assets /app/public/build ./public/build
 
 RUN composer dump-autoload --optimize --no-dev \
     && php artisan package:discover --ansi \

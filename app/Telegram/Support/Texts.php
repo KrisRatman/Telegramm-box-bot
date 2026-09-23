@@ -105,10 +105,31 @@ class Texts
     public static function orderCreated(Order $order): string
     {
         return "✅ Заявка <b>№{$order->number}</b> принята!\n\n"
-            ."Услуга: {$order->service_name}\n"
+            .self::orderContents($order)
             ."Стоимость: {$order->formatted_price}\n\n"
             .'Мы свяжемся с вами в ближайшее время. Статус можно посмотреть в разделе «Мои заявки».'
             .(PaymentService::enabled() && $order->canBePaid() ? "\n\nОплатить можно сразу — кнопка ниже." : '');
+    }
+
+    /**
+     * Одна услуга — строкой, корзина — списком позиций.
+     */
+    public static function orderContents(Order $order): string
+    {
+        $items = $order->items;
+
+        if ($items->count() <= 1) {
+            return "Услуга: {$order->service_name}\n";
+        }
+
+        $text = "Состав заявки:\n";
+
+        foreach ($items as $item) {
+            $quantity = $item->quantity > 1 ? " × {$item->quantity}" : '';
+            $text .= "• {$item->service_name}{$quantity} — {$item->formatted_total}\n";
+        }
+
+        return $text;
     }
 
     public static function orderCancelled(): string
@@ -151,7 +172,7 @@ class Texts
     {
         $user = $order->telegramUser;
         $text = "🔔 <b>Новая заявка №{$order->number}</b>\n\n"
-            ."Услуга: {$order->service_name}\n"
+            .self::orderContents($order)
             ."Стоимость: {$order->formatted_price}\n"
             ."Клиент: {$order->contact_name}\n"
             ."Телефон: {$order->contact_phone}\n";

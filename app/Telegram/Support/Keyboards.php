@@ -11,6 +11,7 @@ use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\KeyboardButton;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\ReplyKeyboardMarkup;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\ReplyKeyboardRemove;
+use SergiX44\Nutgram\Telegram\Types\WebApp\WebAppInfo;
 
 /**
  * Инлайн-клавиатуры бота. Схема callback_data: "раздел:действие:параметр".
@@ -19,10 +20,27 @@ class Keyboards
 {
     public static function mainMenu(): InlineKeyboardMarkup
     {
-        return InlineKeyboardMarkup::make()
+        $keyboard = InlineKeyboardMarkup::make();
+
+        if ($url = self::miniAppUrl()) {
+            $keyboard->addRow(InlineKeyboardButton::make('🛒 Каталог и корзина', web_app: WebAppInfo::make($url)));
+        }
+
+        return $keyboard
             ->addRow(InlineKeyboardButton::make('🛍 Каталог услуг', callback_data: 'catalog:list'))
             ->addRow(InlineKeyboardButton::make('📋 Мои заявки', callback_data: 'orders:my'))
             ->addRow(InlineKeyboardButton::make('ℹ️ О нас и контакты', callback_data: 'menu:help'));
+    }
+
+    /**
+     * Адрес Mini App или null, если он не задан. Telegram открывает
+     * Mini App только по https, с http-адресом кнопка сломала бы всё меню.
+     */
+    public static function miniAppUrl(): ?string
+    {
+        $url = (string) config('telegram.mini_app.url');
+
+        return str_starts_with($url, 'https://') ? $url : null;
     }
 
     /**

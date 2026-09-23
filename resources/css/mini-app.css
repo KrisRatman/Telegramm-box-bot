@@ -1,0 +1,25 @@
+@import 'tailwindcss';
+
+@source '../views/mini-app.blade.php';
+@source '../js/mini-app.js';
+
+/*
+ * Цвета Mini App берём из темы Telegram: SDK выставляет --tg-theme-*
+ * на <html> и обновляет их, когда клиент переключает светлую/тёмную тему.
+ * Запасные значения — для открытия страницы в обычном браузере.
+ */
+@theme inline {
+    --color-tg-bg: var(--tg-theme-bg-color, #ffffff);
+    --color-tg-secondary: var(--tg-theme-secondary-bg-color, #f1f1f4);
+    --color-tg-section: var(--tg-theme-section-bg-color, #ffffff);
+    --color-tg-text: var(--tg-theme-text-color, #111111);
+    --color-tg-hint: var(--tg-theme-hint-color, #8a8a8e);
+    --color-tg-link: var(--tg-theme-link-color, #2481cc);
+    --color-tg-button: var(--tg-theme-button-color, #2481cc);
+    --color-tg-button-text: var(--tg-theme-button-text-color, #ffffff);
+    --color-tg-destructive: var(--tg-theme-destructive-text-color, #e53935);
+}
+
+[x-cloak] {
+    display: none !important;
+}

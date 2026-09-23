@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Telegram\Exceptions\TelegramException;
 use SergiX44\Nutgram\Telegram\Properties\ParseMode;
+use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup;
 use Throwable;
 
 /**
@@ -30,11 +31,13 @@ class BotMessenger
         string $text,
         ?User $author = null,
         ?Broadcast $broadcast = null,
+        ?InlineKeyboardMarkup $keyboard = null,
     ): bool {
         $message = $this->deliver($user, fn () => $this->bot->sendMessage(
             text: $text,
             chat_id: $user->chat_id,
             parse_mode: ParseMode::HTML,
+            reply_markup: $keyboard,
         ));
 
         if ($message === false) {
@@ -67,6 +70,22 @@ class BotMessenger
         $this->log($user, MessageDirection::Out, $logText, $message?->message_id, $author);
 
         return true;
+    }
+
+    /**
+     * Ссылка на счёт без отправки в чат — для оплаты внутри Mini App.
+     *
+     * @param  array<string, mixed>  $invoice  Аргументы createInvoiceLink.
+     */
+    public function createInvoiceLink(array $invoice): ?string
+    {
+        try {
+            return $this->bot->createInvoiceLink(...$invoice);
+        } catch (Throwable $e) {
+            Log::warning('Не удалось создать ссылку на счёт', ['error' => $e->getMessage()]);
+
+            return null;
+        }
     }
 
     /**

@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Orders\Schemas;
 
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -28,6 +30,24 @@ class OrderInfolist
                             ->label('Оплачена')
                             ->dateTime('d.m.Y H:i')
                             ->placeholder('Не оплачена'),
+                    ]),
+                Section::make('Состав заявки')
+                    ->schema([
+                        RepeatableEntry::make('items')
+                            ->hiddenLabel()
+                            ->table([
+                                TableColumn::make('Услуга'),
+                                TableColumn::make('Цена'),
+                                TableColumn::make('Кол-во'),
+                                TableColumn::make('Сумма'),
+                            ])
+                            ->schema([
+                                TextEntry::make('service_name'),
+                                TextEntry::make('price')->money('RUB'),
+                                TextEntry::make('quantity'),
+                                TextEntry::make('formatted_total'),
+                            ])
+                            ->placeholder('Позиций нет'),
                     ]),
                 Section::make('Клиент')
                     ->columns(3)

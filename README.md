@@ -1,7 +1,7 @@
 # Telegram-бот для заявок + веб-админка на Laravel
 
 Готовое решение для приёма заявок через Telegram: клиент выбирает услугу в боте
-и оставляет заявку за минуту, оплачивает её картой прямо в чате, администратор
+или собирает корзину в мини-приложении (Telegram Mini App) и оставляет заявку за минуту, оплачивает её картой прямо в чате, администратор
 видит заявку в веб-панели, меняет статус, отвечает клиенту прямо из админки
 и запускает рассылки по базе пользователей.
 
@@ -43,6 +43,14 @@ docker compose exec app php artisan db:seed --class=DemoSeeder
 - Уведомление клиенту при каждой смене статуса заявки
 - `/help` — краткая инструкция
 
+**Mini App (мини-приложение внутри Telegram)**
+
+- Каталог с вкладками категорий и корзина: несколько услуг и количество в одной заявке
+- Форма контактов с автозаполнением: имя из Telegram, телефон из прошлых заявок
+- Нативные кнопки Telegram (MainButton, BackButton), виброотклик и цвета темы клиента: светлая и тёмная тема подхватываются сами
+- Оплата заказа сразу в Mini App: счёт открывается поверх приложения, без перехода в чат
+- Подтверждение с составом заявки дублируется в чат с ботом
+
 **Админка**
 
 - Дашборд: новые заявки, заявки за сегодня, число пользователей, выручка, последние заявки
@@ -51,6 +59,7 @@ docker compose exec app php artisan db:seed --class=DemoSeeder
 - Ответ клиенту в Telegram прямо из админки, вся переписка сохраняется
 - Оплаты: колонка и фильтр «Оплата» в списке заявок, история платежей в карточке заявки, счёт клиенту одной кнопкой, отметка возврата с уведомлением клиента
 - Уведомление администраторам в Telegram о каждой оплате
+- Состав заявки в карточке: позиции, цена, количество и сумма по каждой услуге
 - Карточка пользователя: профиль, его заявки и история сообщений
 - Каталог: категории и услуги с сортировкой перетаскиванием и флагом «показывать в боте»
 - Рассылки: черновик → запуск через очередь → счётчики доставленных и ошибок в реальном времени
@@ -275,6 +284,27 @@ php artisan nutgram:register-commands
 Оплата работает и через webhook, и через long polling (`php artisan nutgram:run`):
 отдельный эндпоинт для уведомлений от ЮKassa не нужен, всё приходит апдейтами Telegram.
 
+### 7. Подключить Mini App (необязательно)
+
+Telegram открывает Mini App только по **https**. На сервере это `APP_URL` вашего
+домена, локально — тот же туннель, что и для webhook (ngrok, cloudflared).
+
+1. Соберите фронт: `npm install && npm run build`.
+2. Впишите адрес страницы `/app` в `.env`:
+
+   ```dotenv
+   TELEGRAM_MINI_APP_URL=https://ваш-домен/app
+   ```
+
+3. Поставьте Mini App на кнопку меню слева от поля ввода:
+
+   ```bash
+   php artisan telegram:menu-button set     # reset — вернуть список команд
+   ```
+
+В главном меню бота появится кнопка «🛒 Каталог и корзина». Пока адрес не задан
+или начинается с `http://`, кнопка скрыта и бот работает как раньше.
+
 ## Команды проекта
 
 | Команда | Что делает |
@@ -282,6 +312,7 @@ php artisan nutgram:register-commands
 | `php artisan admin:create` | Создать администратора веб-панели |
 | `php artisan telegram:secret` | Сгенерировать значение `TELEGRAM_WEBHOOK_SECRET` |
 | `php artisan telegram:webhook set\|info\|remove` | Управление webhook |
+| `php artisan telegram:menu-button set\|reset` | Открывать Mini App кнопкой меню бота |
 | `php artisan nutgram:register-commands` | Зарегистрировать меню команд бота |
 | `php artisan nutgram:list` | Показать все зарегистрированные обработчики |
 | `php artisan queue:work` | Воркер очереди: рассылки |
@@ -293,19 +324,20 @@ php artisan nutgram:register-commands
 
 ```
 app/
-├── Console/Commands/        admin:create, telegram:secret, telegram:webhook
+├── Console/Commands/        admin:create, telegram:secret, telegram:webhook, telegram:menu-button
 ├── Enums/                   OrderStatus, PaymentStatus, BroadcastStatus, MessageDirection
 ├── Filament/
 │   ├── Actions/             Смена статуса, ответ клиенту, счёт на оплату, запуск рассылки
 │   ├── Resources/           Заявки, пользователи, услуги, категории, рассылки
 │   └── Widgets/             Статистика и последние заявки на дашборде
 ├── Http/
-│   ├── Controllers/         TelegramWebhookController
-│   └── Middleware/          VerifyTelegramWebhook
+│   ├── Controllers/         TelegramWebhookController, MiniApp\ — страница, профиль, заявка
+│   ├── Middleware/          VerifyTelegramWebhook, AuthenticateMiniApp
+│   └── Requests/            MiniApp\StoreOrderRequest
 ├── Jobs/                    StartBroadcast, SendBroadcastMessage
-├── Models/                  TelegramUser, Service, ServiceCategory, Order, Payment, Broadcast, BotMessage
+├── Models/                  TelegramUser, Service, ServiceCategory, Order, OrderItem, Payment, Broadcast, BotMessage
 ├── Observers/               OrderObserver — уведомление клиента о смене статуса
-├── Services/                OrderService, PaymentService, BroadcastService, Telegram\BotMessenger
+├── Services/                OrderService, PaymentService, BroadcastService, Telegram\BotMessenger, Telegram\InitDataValidator
 └── Telegram/
     ├── Commands/            /start
     ├── Conversations/       OrderConversation — диалог оформления заявки
@@ -313,12 +345,16 @@ app/
     ├── Middleware/          TrackTelegramUser — регистрация и лог входящих
     └── Support/             Keyboards, Texts, Screen, BotContext
 
+resources/
+├── views/mini-app.blade.php  Разметка Mini App
+└── js/mini-app.js           Каталог, корзина и оформление на Alpine.js
+
 docker/
 └── entrypoint.sh            Выбор роли контейнера: serve, queue, bot
 
 routes/
 ├── telegram.php             Обработчики бота
-└── web.php                  Webhook и редирект на админку
+└── web.php                  Webhook, Mini App и его API, редирект на админку
 ```
 
 ### Как устроен обмен сообщениями
@@ -359,6 +395,33 @@ routes/
 делается в личном кабинете ЮKassa, а в админке фиксируется кнопкой
 «Отметить возврат» — клиенту уходит уведомление.
 
+### Как устроен Mini App
+
+Mini App — обычная страница `/app` на Blade, Alpine.js и Tailwind, которую Telegram
+открывает во встроенном браузере. Каталог отдаётся сразу в HTML, корзина хранится
+в `localStorage`, а оформление идёт через JSON API `/app/api/*`.
+
+**Кто прислал запрос.** Страницу может открыть кто угодно, поэтому API доверяет
+только `Telegram.WebApp.initData`: это строка с данными пользователя, которую
+Telegram подписывает токеном бота. Фронт шлёт её в заголовке `X-Telegram-Init-Data`,
+`AuthenticateMiniApp` проверяет подпись (HMAC-SHA256 по алгоритму из документации
+Telegram) и срок действия (`TELEGRAM_MINI_APP_AUTH_TTL`). Подделать пользователя
+или переиграть старую строку не выйдет — запрос получит `401`.
+
+**Цены.** С фронта приходят только id услуг и количество. Цены и итог считает
+сервер по каталогу, услуги из скрытых категорий или снятые с продажи отклоняются.
+
+**Заявка с позициями.** Корзина превращается в одну заявку: состав лежит
+в `order_items`, в самой заявке — итог и сводка вида «Лендинг и ещё 2». Заявки
+из диалога в боте устроены так же, только позиция одна. Заявки, созданные
+до появления корзины, миграция перенесла в позиции автоматически.
+
+**Оплата из Mini App.** Вместо сообщения со счётом сервер создаёт ссылку
+(`createInvoiceLink`), и фронт открывает её через `openInvoice` поверх приложения.
+Pre-checkout и `successful_payment` приходят боту как обычно — логика оплаты общая.
+Счёт и чек разбиты по позициям; если администратор вручную поменял цену заявки,
+счёт идёт одной строкой, чтобы сумма позиций совпала с суммой к оплате.
+
 ## Тесты
 
 ```bash
@@ -381,6 +444,10 @@ php artisan test
 - успешная оплата: отметка заявки, уведомления, идемпотентность, повторное списание, оплата во время диалога
 - возврат: отметка в админке, уведомление клиента, заявка с несколькими платежами
 - доступность всех экранов админки и карточек
+- Mini App: проверка `initData` — без подписи, с подменённым пользователем, чужим токеном и просроченной датой
+- Mini App: заявка из корзины с ценами из каталога, позиции, отказ для недоступной услуги, валидация, уведомления
+- Mini App: ссылка на счёт с разбивкой по позициям и одна строка после ручной правки цены
+- кнопка Mini App в меню бота: показ для https-адреса и скрытие для http
 
 Тесты не ходят в Telegram: пакет подменяет клиент на `Nutgram::fake()`,
 исходящие запросы проверяются ассертами.

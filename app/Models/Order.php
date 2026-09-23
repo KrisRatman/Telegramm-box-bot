@@ -79,6 +79,12 @@ class Order extends Model
         return $this->belongsTo(Service::class);
     }
 
+    /** @return HasMany<OrderItem, $this> */
+    public function items(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
     /** @return HasMany<Payment, $this> */
     public function payments(): HasMany
     {

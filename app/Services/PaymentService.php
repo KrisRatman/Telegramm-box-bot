@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Telegram\BotMessenger;
@@ -61,6 +62,20 @@ class PaymentService
             logText: Texts::invoiceLog($order),
             author: $author,
         );
+    }
+
+    /**
+     * Ссылка на тот же счёт для Mini App: там он открывается через
+     * Telegram.WebApp.openInvoice(), без сообщения в чате. Pre-checkout
+     * и successful_payment потом приходят боту как обычно.
+     */
+    public function invoiceLink(Order $order): ?string
+    {
+        if (! self::enabled() || ! $order->canBePaid()) {
+            return null;
+        }
+
+        return $this->messenger->createInvoiceLink($this->invoiceFor($order, $this->pendingPaymentFor($order)));
     }
 
     /**
@@ -230,6 +245,8 @@ class PaymentService
      */
     private function invoiceFor(Order $order, Payment $payment): array
     {
+        $lines = $this->invoiceLines($order, $payment);
+
         $invoice = [
             // Ограничения Bot API: заголовок до 32 символов, описание до 255.
             'title' => mb_substr("Заявка №{$order->number}", 0, 32),
@@ -237,34 +254,64 @@ class PaymentService
             'payload' => $payment->invoice_payload,
             'provider_token' => (string) config('telegram.payments.provider_token'),
             'currency' => $payment->currency,
-            'prices' => [
-                ['label' => mb_substr($order->service_name, 0, 64), 'amount' => $payment->amountInMinorUnits()],
-            ],
+            'prices' => array_map(fn (array $line) => [
+                'label' => mb_substr($line['quantity'] > 1 ? "{$line['name']} × {$line['quantity']}" : $line['name'], 0, 64),
+                'amount' => $line['unit_minor'] * $line['quantity'],
+            ], $lines),
         ];
 
         if (config('telegram.payments.receipt.enabled')) {
             // ЮKassa отправляет чек на телефон покупателя, поэтому просим его
-            // в форме оплаты и передаём провайдеру вместе с позицией чека.
+            // в форме оплаты и передаём провайдеру вместе с позициями чека.
             $invoice['need_phone_number'] = true;
             $invoice['send_phone_number_to_provider'] = true;
             $invoice['provider_data'] = json_encode([
                 'receipt' => [
-                    'items' => [[
-                        'description' => mb_substr($order->service_name, 0, 128),
-                        'quantity' => '1.00',
+                    'items' => array_map(fn (array $line) => [
+                        'description' => mb_substr($line['name'], 0, 128),
+                        'quantity' => number_format($line['quantity'], 2, '.', ''),
+                        // В чеке ЮKassa amount — цена за единицу.
                         'amount' => [
-                            'value' => number_format((float) $payment->amount, 2, '.', ''),
+                            'value' => number_format($line['unit_minor'] / 100, 2, '.', ''),
                             'currency' => $payment->currency,
                         ],
                         'vat_code' => (int) config('telegram.payments.receipt.vat_code', 1),
                         'payment_mode' => 'full_payment',
                         'payment_subject' => 'service',
-                    ]],
+                    ], $lines),
                 ],
             ], JSON_UNESCAPED_UNICODE);
         }
 
         return $invoice;
+    }
+
+    /**
+     * Позиции счёта. Сумма позиций обязана совпасть с суммой платежа —
+     * иначе Telegram и ЮKassa счёт не примут. Если админ поправил цену
+     * заявки вручную, состав уже не сходится, и счёт идёт одной строкой.
+     *
+     * @return list<array{name: string, quantity: int, unit_minor: int}>
+     */
+    private function invoiceLines(Order $order, Payment $payment): array
+    {
+        $items = $order->items()->get();
+
+        $itemsTotal = $items->sum(fn (OrderItem $item) => Payment::toMinorUnits($item->price) * $item->quantity);
+
+        if ($items->count() > 1 && $itemsTotal === $payment->amountInMinorUnits()) {
+            return $items->map(fn (OrderItem $item) => [
+                'name' => $item->service_name,
+                'quantity' => $item->quantity,
+                'unit_minor' => Payment::toMinorUnits($item->price),
+            ])->values()->all();
+        }
+
+        return [[
+            'name' => $order->service_name,
+            'quantity' => 1,
+            'unit_minor' => $payment->amountInMinorUnits(),
+        ]];
     }
 
     private function notifyPaid(Payment $payment, bool $isDuplicate): void
