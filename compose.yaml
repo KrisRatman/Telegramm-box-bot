@@ -36,6 +36,9 @@ services:
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
       TELEGRAM_ADMIN_CHAT_IDS: ${TELEGRAM_ADMIN_CHAT_IDS:-}
+      TELEGRAM_MINI_APP_URL: ${TELEGRAM_MINI_APP_URL:-}
+      # Какого бота слушает сервис bot в режиме long polling. Пусто — первый активный.
+      BOT_ID: ${BOT_ID:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-password}
     ports:

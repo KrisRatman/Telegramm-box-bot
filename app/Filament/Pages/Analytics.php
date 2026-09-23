@@ -7,6 +7,7 @@ use App\Filament\Widgets\Analytics\NewUsersChart;
 use App\Filament\Widgets\Analytics\OrdersBySourceChart;
 use App\Filament\Widgets\Analytics\SummaryStats;
 use App\Filament\Widgets\Analytics\TopServicesWidget;
+use App\Models\Bot;
 use BackedEnum;
 use Filament\Forms\Components\Select;
 use Filament\Pages\Dashboard;
@@ -33,6 +34,11 @@ class Analytics extends Dashboard
     public function filtersForm(Schema $schema): Schema
     {
         return $schema->components([
+            Select::make('bot')
+                ->label('Бот')
+                ->options(fn () => Bot::query()->orderBy('name')->pluck('name', 'id'))
+                ->placeholder('Все боты')
+                ->native(false),
             Select::make('period')
                 ->label('Период')
                 ->options([

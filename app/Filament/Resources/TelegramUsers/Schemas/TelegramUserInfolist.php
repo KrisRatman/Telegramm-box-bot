@@ -25,7 +25,9 @@ class TelegramUserInfolist
                             ->placeholder('—'),
                         TextEntry::make('chat_id')->label('Chat ID')->copyable(),
                         TextEntry::make('phone')->label('Телефон')->copyable()->placeholder('—'),
-                        TextEntry::make('language_code')->label('Язык'),
+                        TextEntry::make('bot.name')->label('Бот'),
+                        TextEntry::make('language_code')->label('Язык Telegram'),
+                        TextEntry::make('locale')->label('Выбранный язык')->placeholder('Не выбирал'),
                         IconEntry::make('is_blocked')->label('Заблокировал бота')->boolean(),
                         TextEntry::make('created_at')->label('Первый контакт')->dateTime('d.m.Y H:i'),
                         TextEntry::make('last_activity_at')

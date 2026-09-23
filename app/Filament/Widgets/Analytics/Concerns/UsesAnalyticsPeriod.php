@@ -23,7 +23,14 @@ trait UsesAnalyticsPeriod
     {
         $days = (int) ($this->pageFilters['period'] ?? 30);
 
-        return Period::lastDays(in_array($days, [7, 30, 90], true) ? $days : 30);
+        return Period::lastDays(in_array($days, [7, 30, 90], true) ? $days : 30, $this->botId());
+    }
+
+    protected function botId(): ?int
+    {
+        $bot = $this->pageFilters['bot'] ?? null;
+
+        return filled($bot) ? (int) $bot : null;
     }
 
     protected function analytics(): AnalyticsService

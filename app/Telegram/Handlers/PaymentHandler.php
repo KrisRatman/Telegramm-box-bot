@@ -20,7 +20,7 @@ class PaymentHandler
         // можно подменить, а чужой счёт выставлять нельзя.
         $order = BotContext::user($bot)->orders()->find((int) $orderId);
 
-        if ($order === null || ! PaymentService::enabled() || ! $order->canBePaid()) {
+        if ($order === null || ! BotContext::bot($bot)->paymentsEnabled() || ! $order->canBePaid()) {
             $bot->answerCallbackQuery(text: Texts::invoiceUnavailable(), show_alert: true);
 
             return;

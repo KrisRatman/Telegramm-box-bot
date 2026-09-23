@@ -28,7 +28,10 @@ class StartBroadcast implements ShouldQueue
             return;
         }
 
-        $recipients = TelegramUser::query()->subscribed()->pluck('id');
+        $recipients = TelegramUser::query()
+            ->where('bot_id', $broadcast->bot_id)
+            ->subscribed()
+            ->pluck('id');
 
         $broadcast->forceFill([
             'status' => BroadcastStatus::Sending,

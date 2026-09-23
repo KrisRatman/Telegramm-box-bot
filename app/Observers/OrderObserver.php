@@ -26,6 +26,10 @@ class OrderObserver
             return;
         }
 
-        $this->messenger->sendToUser($order->telegramUser, Texts::statusChanged($order));
+        // Статус меняет администратор, а сообщение читает клиент — на своём языке.
+        $this->messenger->sendToUser(
+            $order->telegramUser,
+            Texts::for($order->telegramUser, fn () => Texts::statusChanged($order)),
+        );
     }
 }

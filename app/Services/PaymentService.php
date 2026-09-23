@@ -31,11 +31,6 @@ class PaymentService
 {
     public function __construct(private readonly BotMessenger $messenger) {}
 
-    public static function enabled(): bool
-    {
-        return filled(config('telegram.payments.provider_token'));
-    }
-
     /**
      * Выставляет счёт по заявке. Повторный вызов не плодит платежи:
      * используется тот же ожидающий платёж, сумма подтягивается из заявки.
@@ -44,13 +39,9 @@ class PaymentService
      */
     public function sendInvoice(Order $order, ?User $author = null): bool
     {
-        if (! self::enabled() || ! $order->canBePaid()) {
-            return false;
-        }
+        $order->loadMissing('telegramUser', 'bot');
 
-        $order->loadMissing('telegramUser');
-
-        if ($order->telegramUser === null) {
+        if (! $order->bot?->paymentsEnabled() || ! $order->canBePaid() || $order->telegramUser === null) {
             return false;
         }
 
@@ -58,7 +49,7 @@ class PaymentService
 
         return $this->messenger->sendInvoice(
             user: $order->telegramUser,
-            invoice: $this->invoiceFor($order, $payment),
+            invoice: Texts::for($order->telegramUser, fn () => $this->invoiceFor($order, $payment)),
             logText: Texts::invoiceLog($order),
             author: $author,
         );
@@ -71,11 +62,18 @@ class PaymentService
      */
     public function invoiceLink(Order $order): ?string
     {
-        if (! self::enabled() || ! $order->canBePaid()) {
+        $order->loadMissing('telegramUser', 'bot');
+
+        if (! $order->bot?->paymentsEnabled() || ! $order->canBePaid() || $order->telegramUser === null) {
             return null;
         }
 
-        return $this->messenger->createInvoiceLink($this->invoiceFor($order, $this->pendingPaymentFor($order)));
+        $payment = $this->pendingPaymentFor($order);
+
+        return $this->messenger->createInvoiceLink(
+            $order->bot,
+            Texts::for($order->telegramUser, fn () => $this->invoiceFor($order, $payment)),
+        );
     }
 
     /**
@@ -89,24 +87,24 @@ class PaymentService
             ->first();
 
         if ($payment === null || $payment->order === null) {
-            return 'Счёт не найден. Откройте «Мои заявки» и запросите новый.';
+            return __('bot.payment.not_found');
         }
 
         $order = $payment->order;
 
         if ($order->status === OrderStatus::Cancelled) {
-            return 'Заявка отменена — оплата не требуется.';
+            return __('bot.payment.order_cancelled');
         }
 
         if ($payment->status !== PaymentStatus::Pending || $order->isPaid()) {
-            return 'Эта заявка уже оплачена.';
+            return __('bot.payment.already_paid');
         }
 
         // Старый счёт в чате мог остаться после того, как админ поменял цену.
         if ($query->currency !== $payment->currency
             || $query->total_amount !== $payment->amountInMinorUnits()
             || $payment->amountInMinorUnits() !== Payment::toMinorUnits($order->price)) {
-            return 'Сумма заявки изменилась. Запросите новый счёт в разделе «Мои заявки».';
+            return __('bot.payment.amount_changed');
         }
 
         return null;
@@ -208,7 +206,8 @@ class PaymentService
         $payment->loadMissing('order.telegramUser');
 
         if ($payment->order->telegramUser !== null) {
-            $this->messenger->sendToUser($payment->order->telegramUser, Texts::paymentRefunded($payment));
+            $client = $payment->order->telegramUser;
+            $this->messenger->sendToUser($client, Texts::for($client, fn () => Texts::paymentRefunded($payment)));
         }
 
         return $payment;
@@ -249,13 +248,13 @@ class PaymentService
 
         $invoice = [
             // Ограничения Bot API: заголовок до 32 символов, описание до 255.
-            'title' => mb_substr("Заявка №{$order->number}", 0, 32),
-            'description' => mb_substr("Оплата услуги «{$order->service_name}»", 0, 255),
+            'title' => mb_substr(__('bot.payment.invoice_title', ['number' => $order->number]), 0, 32),
+            'description' => mb_substr(__('bot.payment.invoice_description', ['name' => Texts::orderTitle($order)]), 0, 255),
             'payload' => $payment->invoice_payload,
-            'provider_token' => (string) config('telegram.payments.provider_token'),
+            'provider_token' => (string) $order->bot->payment_provider_token,
             'currency' => $payment->currency,
             'prices' => array_map(fn (array $line) => [
-                'label' => mb_substr($line['quantity'] > 1 ? "{$line['name']} × {$line['quantity']}" : $line['name'], 0, 64),
+                'label' => mb_substr($line['quantity'] > 1 ? "{$line['label']} × {$line['quantity']}" : $line['label'], 0, 64),
                 'amount' => $line['unit_minor'] * $line['quantity'],
             ], $lines),
         ];
@@ -268,6 +267,7 @@ class PaymentService
             $invoice['provider_data'] = json_encode([
                 'receipt' => [
                     'items' => array_map(fn (array $line) => [
+                        // Чек по 54-ФЗ — на русском, независимо от языка клиента.
                         'description' => mb_substr($line['name'], 0, 128),
                         'quantity' => number_format($line['quantity'], 2, '.', ''),
                         // В чеке ЮKassa amount — цена за единицу.
@@ -291,17 +291,20 @@ class PaymentService
      * иначе Telegram и ЮKassa счёт не примут. Если админ поправил цену
      * заявки вручную, состав уже не сходится, и счёт идёт одной строкой.
      *
-     * @return list<array{name: string, quantity: int, unit_minor: int}>
+     * name — для чека (русский), label — подпись в счёте на языке клиента.
+     *
+     * @return list<array{name: string, label: string, quantity: int, unit_minor: int}>
      */
     private function invoiceLines(Order $order, Payment $payment): array
     {
-        $items = $order->items()->get();
+        $items = $order->items()->with('service')->get();
 
         $itemsTotal = $items->sum(fn (OrderItem $item) => Payment::toMinorUnits($item->price) * $item->quantity);
 
         if ($items->count() > 1 && $itemsTotal === $payment->amountInMinorUnits()) {
             return $items->map(fn (OrderItem $item) => [
                 'name' => $item->service_name,
+                'label' => Texts::itemName($item),
                 'quantity' => $item->quantity,
                 'unit_minor' => Payment::toMinorUnits($item->price),
             ])->values()->all();
@@ -309,6 +312,7 @@ class PaymentService
 
         return [[
             'name' => $order->service_name,
+            'label' => Texts::orderTitle($order),
             'quantity' => 1,
             'unit_minor' => $payment->amountInMinorUnits(),
         ]];
@@ -316,16 +320,16 @@ class PaymentService
 
     private function notifyPaid(Payment $payment, bool $isDuplicate): void
     {
-        $payment->loadMissing('order.telegramUser');
+        $payment->loadMissing('order.telegramUser', 'order.bot');
         $order = $payment->order;
 
         if ($order->telegramUser !== null) {
             $this->messenger->sendToUser(
                 $order->telegramUser,
-                $isDuplicate ? Texts::duplicatePayment($payment) : Texts::paymentReceived($payment),
+                Texts::for($order->telegramUser, fn () => $isDuplicate ? Texts::duplicatePayment($payment) : Texts::paymentReceived($payment)),
             );
         }
 
-        $this->messenger->notifyAdmins(Texts::paymentForAdmin($payment, $isDuplicate));
+        $this->messenger->notifyAdmins($order->bot, Texts::paymentForAdmin($payment, $isDuplicate));
     }
 }

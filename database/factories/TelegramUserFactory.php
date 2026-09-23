@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Bot;
 use App\Models\TelegramUser;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -13,6 +14,8 @@ class TelegramUserFactory extends Factory
     public function definition(): array
     {
         return [
+            // Первый бот в базе или новый: в тестах с одним ботом все записи попадают в него.
+            'bot_id' => fn () => Bot::query()->value('id') ?? Bot::factory(),
             'chat_id' => fake()->unique()->numberBetween(100000, 999999999),
             'username' => fake()->userName(),
             'first_name' => fake()->firstName(),

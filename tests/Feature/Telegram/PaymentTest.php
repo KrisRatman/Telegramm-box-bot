@@ -4,6 +4,7 @@ namespace Tests\Feature\Telegram;
 
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
+use App\Models\Bot;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Service;
@@ -26,16 +27,17 @@ class PaymentTest extends TestCase
 
     private TelegramUser $user;
 
+    private Bot $botModel;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        config([
-            'telegram.payments.provider_token' => 'test-provider-token',
-            'telegram.admin_chat_ids' => [(string) self::ADMIN_CHAT_ID],
-        ]);
+        config(['telegram.admin_chat_ids' => [(string) self::ADMIN_CHAT_ID]]);
 
-        $this->bot = $this->fakeBot(self::CHAT_ID);
+        // Токен провайдера у каждого бота свой: BotFather выдаёт его на бота.
+        $this->botModel = Bot::factory()->withPayments()->create();
+        $this->bot = $this->fakeBot(self::CHAT_ID, bot: $this->botModel);
         $this->user = TelegramUser::factory()->create(['chat_id' => self::CHAT_ID]);
     }
 
@@ -60,7 +62,7 @@ class PaymentTest extends TestCase
 
     public function test_payment_buttons_are_hidden_without_provider_token(): void
     {
-        config(['telegram.payments.provider_token' => null]);
+        $this->botModel->update(['payment_provider_token' => null]);
         Order::factory()->for($this->user)->create();
 
         $this->bot->hearCallbackQueryData('orders:my')->reply();

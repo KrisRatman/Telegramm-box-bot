@@ -7,6 +7,7 @@ use App\Enums\PaymentStatus;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Resources\Orders\RelationManagers\PaymentsRelationManager;
+use App\Models\Bot;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
@@ -27,7 +28,7 @@ class PaymentAdminTest extends TestCase
     {
         parent::setUp();
 
-        config(['telegram.payments.provider_token' => 'test-provider-token']);
+        Bot::factory()->withPayments()->create();
 
         $this->bot = $this->fakeBot();
         $this->actingAs(User::factory()->create());
@@ -62,7 +63,7 @@ class PaymentAdminTest extends TestCase
 
     public function test_send_invoice_is_hidden_without_provider_token(): void
     {
-        config(['telegram.payments.provider_token' => null]);
+        Bot::query()->update(['payment_provider_token' => null]);
         $order = Order::factory()->create();
 
         Livewire::test(ViewOrder::class, ['record' => $order->getRouteKey()])

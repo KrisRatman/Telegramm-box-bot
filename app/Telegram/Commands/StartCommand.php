@@ -12,6 +12,6 @@ class StartCommand
 {
     public function __invoke(Nutgram $bot): void
     {
-        Screen::show($bot, Texts::greeting(BotContext::user($bot)), Keyboards::mainMenu());
+        Screen::show($bot, Texts::greeting(BotContext::user($bot)), Keyboards::mainMenu(BotContext::bot($bot)));
     }
 }

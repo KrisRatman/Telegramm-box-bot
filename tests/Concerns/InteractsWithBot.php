@@ -2,6 +2,8 @@
 
 namespace Tests\Concerns;
 
+use App\Models\Bot;
+use App\Telegram\BotManager;
 use GuzzleHttp\Psr7\Request;
 use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Telegram\Types\Chat\Chat;
@@ -11,10 +13,19 @@ use SergiX44\Nutgram\Testing\FakeNutgram;
 /**
  * В тестах контейнер отдаёт Nutgram::fake(), поэтому запросы к Bot API
  * никуда не уходят, а ответы бота можно проверять ассертами.
+ * BotManager в тестах отдаёт этот же fake для любого бота.
  */
 trait InteractsWithBot
 {
-    protected function fakeBot(int $chatId = 424242, string $firstName = 'Иван'): Nutgram
+    /**
+     * Бот, от имени которого идут апдейты: первый в базе или новый.
+     */
+    protected function testBot(): Bot
+    {
+        return Bot::query()->orderBy('id')->first() ?? Bot::factory()->create();
+    }
+
+    protected function fakeBot(int $chatId = 424242, string $firstName = 'Иван', ?Bot $bot = null, string $languageCode = 'ru'): Nutgram
     {
         $user = new User;
         $user->id = $chatId;
@@ -22,14 +33,15 @@ trait InteractsWithBot
         $user->first_name = $firstName;
         $user->last_name = 'Петров';
         $user->username = 'ivan';
-        $user->language_code = 'ru';
+        $user->language_code = $languageCode;
 
         $chat = new Chat;
         $chat->id = $chatId;
         $chat->type = 'private';
         $chat->first_name = $firstName;
 
-        return app(Nutgram::class)
+        // Привязываем fake к боту: обработчики узнают по нему, чей это апдейт.
+        return app(BotManager::class)->for($bot ?? $this->testBot())
             ->setCommonUser($user)
             ->setCommonChat($chat);
     }

@@ -11,15 +11,16 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect('/admin'));
 
-Route::post('/telegram/webhook', TelegramWebhookController::class)
+Route::post('/telegram/webhook/{bot}', TelegramWebhookController::class)
     ->middleware(VerifyTelegramWebhook::class)
     ->name('telegram.webhook');
 
 // --- Mini App ----------------------------------------------------------------
 
-Route::get('/app', MiniAppController::class)->name('mini-app');
+// {bot} — id бота: у каждого свой каталог и своя подпись initData.
+Route::get('/app/{bot}', MiniAppController::class)->name('mini-app');
 
-Route::prefix('app/api')
+Route::prefix('app/{bot}/api')
     ->name('mini-app.')
     ->middleware([AuthenticateMiniApp::class, 'throttle:30,1'])
     ->group(function () {

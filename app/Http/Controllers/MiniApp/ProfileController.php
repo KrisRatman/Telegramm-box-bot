@@ -21,6 +21,8 @@ class ProfileController extends Controller
         return response()->json([
             'name' => $user->first_name ?? $user->full_name,
             'phone' => $user->phone,
+            // Тот же язык, что и в чате с ботом, включая выбор через /language.
+            'locale' => $user->preferredLocale(),
         ]);
     }
 }

@@ -2,23 +2,26 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTranslations;
 use Database\Factories\ServiceFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Service extends Model
 {
     /** @use HasFactory<ServiceFactory> */
-    use HasFactory;
+    use HasFactory, HasTranslations;
 
     protected $fillable = [
         'service_category_id',
         'name',
         'slug',
         'description',
+        'translations',
         'price',
         'duration_minutes',
         'sort_order',
@@ -41,6 +44,12 @@ class Service extends Model
         return $this->belongsTo(ServiceCategory::class, 'service_category_id');
     }
 
+    /** @return BelongsToMany<Bot, $this> */
+    public function bots(): BelongsToMany
+    {
+        return $this->belongsToMany(Bot::class);
+    }
+
     /** @return HasMany<Order, $this> */
     public function orders(): HasMany
     {
@@ -54,13 +63,16 @@ class Service extends Model
     }
 
     /**
-     * Услуга видна клиенту: активна сама и лежит в активной категории.
+     * Услуга видна клиенту бота: активна, лежит в активной категории
+     * и отмечена для продажи в этом боте.
      *
      * @param  Builder<Service>  $query
      */
-    public function scopeOrderable(Builder $query): void
+    public function scopeOrderable(Builder $query, Bot|int $bot): void
     {
-        $query->active()->whereHas('category', fn (Builder $category) => $category->where('is_active', true));
+        $query->active()
+            ->whereHas('category', fn (Builder $category) => $category->where('is_active', true))
+            ->whereHas('bots', fn (Builder $bots) => $bots->whereKey($bot instanceof Bot ? $bot->id : $bot));
     }
 
     public function getFormattedPriceAttribute(): string

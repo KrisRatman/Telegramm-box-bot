@@ -6,6 +6,7 @@ use App\Filament\Actions\ReplyToTelegramUserAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 
@@ -27,6 +28,11 @@ class TelegramUsersTable
                     ->url(fn ($record) => $record->telegram_link)
                     ->openUrlInNewTab()
                     ->placeholder('—'),
+                TextColumn::make('bot.name')
+                    ->label('Бот')
+                    ->badge()
+                    ->color('gray')
+                    ->toggleable(),
                 TextColumn::make('chat_id')
                     ->label('Chat ID')
                     ->copyable()
@@ -52,6 +58,10 @@ class TelegramUsersTable
                     ->sortable(),
             ])
             ->filters([
+                SelectFilter::make('bot')
+                    ->label('Бот')
+                    ->relationship('bot', 'name')
+                    ->preload(),
                 TernaryFilter::make('is_blocked')
                     ->label('Заблокировал бота')
                     ->placeholder('Все')

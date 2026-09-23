@@ -44,12 +44,12 @@ class OrderService
         string $contactPhone,
         ?string $comment = null,
     ): Order {
-        $services = Service::query()->orderable()->findMany(array_keys($quantities));
+        $services = Service::query()->orderable($user->bot_id)->findMany(array_keys($quantities));
 
         // Услугу могли снять с продажи, пока клиент держал её в корзине.
         if ($services->count() !== count($quantities)) {
             throw ValidationException::withMessages([
-                'items' => 'Часть услуг больше недоступна. Обновите каталог и проверьте корзину.',
+                'items' => __('mini-app.errors.services_unavailable'),
             ]);
         }
 
@@ -62,7 +62,8 @@ class OrderService
 
         // Клиент оформлял заявку в Mini App — подтверждение дублируем в чат,
         // чтобы номер и состав остались в переписке.
-        $this->messenger->sendToUser($user, Texts::orderCreated($order), keyboard: Keyboards::orderCreated($order));
+        [$text, $keyboard] = Texts::for($user, fn () => [Texts::orderCreated($order), Keyboards::orderCreated($order)]);
+        $this->messenger->sendToUser($user, $text, keyboard: $keyboard);
 
         return $order;
     }
@@ -82,6 +83,7 @@ class OrderService
             $first = $lines->first()['service'];
 
             $order = Order::create([
+                'bot_id' => $user->bot_id,
                 'telegram_user_id' => $user->id,
                 // Одна услуга — ссылка на неё, для корзины в списке заявок хватит сводки.
                 'service_id' => $lines->count() === 1 ? $first->id : null,
@@ -110,7 +112,8 @@ class OrderService
             $user->forceFill(['phone' => $contactPhone])->save();
         }
 
-        $this->messenger->notifyAdmins(Texts::newOrderForAdmin($order->load('telegramUser', 'items')));
+        $order->load('telegramUser', 'items.service', 'bot');
+        $this->messenger->notifyAdmins($order->bot, Texts::newOrderForAdmin($order));
 
         return $order;
     }

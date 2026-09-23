@@ -49,7 +49,7 @@ class ResilientPolling extends Polling
                     'attempt' => $failures,
                     'retry_in_seconds' => $pause,
                     // Guzzle кладёт в текст ошибки URL, а в нём токен бота.
-                    'error' => str_replace((string) config('nutgram.token'), '***', $e->getMessage()),
+                    'error' => preg_replace('/bot\d+:[\w-]+/', 'bot***', $e->getMessage()),
                 ]);
 
                 sleep($pause);

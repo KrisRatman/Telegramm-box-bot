@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Telegram;
 
+use App\Models\Bot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -9,47 +10,76 @@ class WebhookTest extends TestCase
 {
     use RefreshDatabase;
 
+    private Bot $bot;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        config(['telegram.webhook_secret' => 'super-secret-token']);
+        $this->bot = Bot::factory()->create();
     }
 
     public function test_request_without_secret_is_rejected(): void
     {
-        $this->postJson('/telegram/webhook', $this->update())
+        $this->postJson($this->url(), $this->update())
             ->assertForbidden();
     }
 
     public function test_request_with_wrong_secret_is_rejected(): void
     {
         $this->withHeader('X-Telegram-Bot-Api-Secret-Token', 'wrong')
-            ->postJson('/telegram/webhook', $this->update())
+            ->postJson($this->url(), $this->update())
             ->assertForbidden();
     }
 
-    public function test_request_with_valid_secret_is_processed(): void
+    public function test_request_with_valid_secret_is_processed_for_that_bot(): void
     {
-        $this->withHeader('X-Telegram-Bot-Api-Secret-Token', 'super-secret-token')
-            ->postJson('/telegram/webhook', $this->update())
+        $this->withHeader('X-Telegram-Bot-Api-Secret-Token', $this->bot->webhook_secret)
+            ->postJson($this->url(), $this->update())
             ->assertOk();
 
-        $this->assertDatabaseHas('telegram_users', ['chat_id' => 555001]);
+        $this->assertDatabaseHas('telegram_users', ['chat_id' => 555001, 'bot_id' => $this->bot->id]);
     }
 
-    public function test_webhook_without_configured_secret_fails_loudly(): void
+    public function test_secret_of_another_bot_is_rejected(): void
     {
-        config(['telegram.webhook_secret' => '']);
+        $other = Bot::factory()->create();
 
-        $this->withHeader('X-Telegram-Bot-Api-Secret-Token', 'anything')
-            ->postJson('/telegram/webhook', $this->update())
-            ->assertStatus(500);
+        $this->withHeader('X-Telegram-Bot-Api-Secret-Token', $other->webhook_secret)
+            ->postJson($this->url(), $this->update())
+            ->assertForbidden();
+    }
+
+    public function test_inactive_bot_does_not_accept_updates(): void
+    {
+        $this->bot->update(['is_active' => false]);
+
+        $this->withHeader('X-Telegram-Bot-Api-Secret-Token', $this->bot->webhook_secret)
+            ->postJson($this->url(), $this->update())
+            ->assertNotFound();
+    }
+
+    public function test_same_person_in_two_bots_is_two_users(): void
+    {
+        $other = Bot::factory()->create();
+
+        foreach ([$this->bot, $other] as $bot) {
+            $this->withHeader('X-Telegram-Bot-Api-Secret-Token', $bot->webhook_secret)
+                ->postJson("/telegram/webhook/{$bot->id}", $this->update())
+                ->assertOk();
+        }
+
+        $this->assertDatabaseCount('telegram_users', 2);
     }
 
     public function test_webhook_route_rejects_get(): void
     {
-        $this->get('/telegram/webhook')->assertStatus(405);
+        $this->get($this->url())->assertStatus(405);
+    }
+
+    private function url(): string
+    {
+        return "/telegram/webhook/{$this->bot->id}";
     }
 
     /**

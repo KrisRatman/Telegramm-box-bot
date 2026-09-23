@@ -84,7 +84,7 @@ case "$ROLE" in
         exec php artisan queue:work --tries=3 --sleep=1 --max-time=3600
         ;;
     bot)
-        exec php artisan nutgram:run
+        exec php artisan telegram:poll "${BOT_ID:-}"
         ;;
     *)
         # Любая другая команда выполняется как есть: docker compose run app php artisan ...

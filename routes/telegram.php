@@ -5,6 +5,7 @@
 use App\Telegram\Commands\StartCommand;
 use App\Telegram\Conversations\OrderConversation;
 use App\Telegram\Handlers\CatalogHandler;
+use App\Telegram\Handlers\LanguageHandler;
 use App\Telegram\Handlers\MenuHandler;
 use App\Telegram\Handlers\OrdersHandler;
 use App\Telegram\Handlers\PaymentHandler;
@@ -33,10 +34,18 @@ $bot->onCommand('help', [MenuHandler::class, 'help'])
 $bot->onCommand('orders', [OrdersHandler::class, 'my'])
     ->description('Мои заявки');
 
+$bot->onCommand('language', [LanguageHandler::class, 'choose'])
+    ->description('Сменить язык');
+
 // --- Главное меню ----------------------------------------------------------
 
 $bot->onCallbackQueryData('menu:main', [MenuHandler::class, 'main']);
 $bot->onCallbackQueryData('menu:help', [MenuHandler::class, 'help']);
+
+// --- Язык ------------------------------------------------------------------
+
+$bot->onCallbackQueryData('lang:choose', [LanguageHandler::class, 'choose']);
+$bot->onCallbackQueryData('lang:set:{locale}', [LanguageHandler::class, 'set']);
 
 // --- Каталог ---------------------------------------------------------------
 

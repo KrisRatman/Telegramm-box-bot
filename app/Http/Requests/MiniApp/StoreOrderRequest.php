@@ -35,7 +35,7 @@ class StoreOrderRequest extends FormRequest
                     $digits = strlen(preg_replace('/\D+/', '', (string) $value) ?? '');
 
                     if ($digits < 10 || $digits > 15) {
-                        $fail('Укажите телефон полностью, например +7 900 123-45-67.');
+                        $fail(__('mini-app.errors.phone'));
                     }
                 },
             ],
@@ -48,12 +48,7 @@ class StoreOrderRequest extends FormRequest
      */
     public function attributes(): array
     {
-        return [
-            'items' => 'корзина',
-            'contact_name' => 'имя',
-            'contact_phone' => 'телефон',
-            'comment' => 'комментарий',
-        ];
+        return __('mini-app.fields');
     }
 
     /**

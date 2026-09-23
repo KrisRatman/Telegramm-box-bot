@@ -6,20 +6,22 @@ use Carbon\CarbonImmutable;
 use Carbon\CarbonPeriod;
 
 /**
- * Отчётный период: последние N дней, включая сегодня.
+ * Отчётный срез: последние N дней, включая сегодня, и при необходимости
+ * один бот. null в botId — все боты.
  */
 final readonly class Period
 {
     public function __construct(
         public CarbonImmutable $from,
         public CarbonImmutable $to,
+        public ?int $botId = null,
     ) {}
 
-    public static function lastDays(int $days): self
+    public static function lastDays(int $days, ?int $botId = null): self
     {
         $today = CarbonImmutable::today();
 
-        return new self($today->subDays($days - 1), $today->endOfDay());
+        return new self($today->subDays($days - 1), $today->endOfDay(), $botId);
     }
 
     /**
@@ -29,7 +31,7 @@ final readonly class Period
     {
         $length = $this->days();
 
-        return new self($this->from->subDays($length), $this->from->subSecond());
+        return new self($this->from->subDays($length), $this->from->subSecond(), $this->botId);
     }
 
     public function days(): int

@@ -2,9 +2,10 @@
 
 namespace App\Console\Commands;
 
-use App\Telegram\Support\Keyboards;
+use App\Console\Commands\Concerns\SelectsBots;
+use App\Telegram\BotManager;
+use App\Telegram\Support\Texts;
 use Illuminate\Console\Command;
-use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Telegram\Types\Command\MenuButtonDefault;
 use SergiX44\Nutgram\Telegram\Types\Command\MenuButtonWebApp;
 use SergiX44\Nutgram\Telegram\Types\WebApp\WebAppInfo;
@@ -12,16 +13,19 @@ use Throwable;
 
 /**
  * Кнопка слева от поля ввода. По умолчанию там список команд,
- * после set — открывается Mini App из TELEGRAM_MINI_APP_URL.
+ * после set — открывается Mini App бота.
  */
 class TelegramMenuButtonCommand extends Command
 {
+    use SelectsBots;
+
     protected $signature = 'telegram:menu-button
-                            {action=set : set — открывать Mini App, reset — вернуть список команд}';
+                            {action=set : set — открывать Mini App, reset — вернуть список команд}
+                            {--bot= : id бота; без опции — все активные боты}';
 
-    protected $description = 'Поставить Mini App на кнопку меню бота';
+    protected $description = 'Поставить Mini App на кнопку меню ботов';
 
-    public function handle(Nutgram $bot): int
+    public function handle(BotManager $manager): int
     {
         $action = $this->argument('action');
 
@@ -31,26 +35,38 @@ class TelegramMenuButtonCommand extends Command
             return self::FAILURE;
         }
 
-        $url = Keyboards::miniAppUrl();
+        $bots = $this->selectedBots();
+        $ok = $bots->isNotEmpty();
 
-        if ($action === 'set' && $url === null) {
-            $this->error('Укажите в TELEGRAM_MINI_APP_URL https-адрес страницы /app.');
+        foreach ($bots as $bot) {
+            $url = $bot->miniAppUrl();
 
-            return self::FAILURE;
+            if ($action === 'set' && $url === null) {
+                $this->error("{$bot->name}: укажите в TELEGRAM_MINI_APP_URL https-адрес сайта.");
+                $ok = false;
+
+                continue;
+            }
+
+            try {
+                // Подпись кнопки — на языке бота по умолчанию.
+                $label = Texts::in($bot->default_locale, fn () => __('bot.menu_button'));
+
+                $manager->for($bot)->setChatMenuButton(menu_button: $action === 'set'
+                    ? new MenuButtonWebApp($label, WebAppInfo::make($url))
+                    : new MenuButtonDefault);
+            } catch (Throwable $e) {
+                $this->error("{$bot->name}: Telegram отклонил запрос: ".$e->getMessage());
+                $ok = false;
+
+                continue;
+            }
+
+            $this->components->info($action === 'set'
+                ? "{$bot->name}: кнопка меню открывает {$url}"
+                : "{$bot->name}: кнопка меню снова показывает команды.");
         }
 
-        try {
-            $bot->setChatMenuButton(menu_button: $action === 'set'
-                ? new MenuButtonWebApp('Каталог', WebAppInfo::make($url))
-                : new MenuButtonDefault);
-        } catch (Throwable $e) {
-            $this->error('Telegram отклонил запрос: '.$e->getMessage());
-
-            return self::FAILURE;
-        }
-
-        $this->components->info($action === 'set' ? "Кнопка меню открывает {$url}" : 'Кнопка меню снова показывает команды.');
-
-        return self::SUCCESS;
+        return $ok ? self::SUCCESS : self::FAILURE;
     }
 }

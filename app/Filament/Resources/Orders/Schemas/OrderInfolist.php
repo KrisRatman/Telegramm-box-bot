@@ -18,6 +18,8 @@ class OrderInfolist
                     ->columns(3)
                     ->schema([
                         TextEntry::make('number')->label('Номер')->weight('bold'),
+                        TextEntry::make('bot.name')->label('Бот'),
+                        TextEntry::make('source')->label('Канал')->badge(),
                         TextEntry::make('status')->label('Статус')->badge(),
                         TextEntry::make('created_at')->label('Создана')->dateTime('d.m.Y H:i'),
                         TextEntry::make('service_name')->label('Услуга'),

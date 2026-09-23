@@ -23,9 +23,9 @@ class SendBroadcastAction
             ->visible(fn (Broadcast $record) => $record->isEditable())
             ->requiresConfirmation()
             ->modalHeading('Запустить рассылку?')
-            ->modalDescription(fn () => 'Сообщение получат '
-                .app(BroadcastService::class)->recipientsCount()
-                .' пользователей. Отменить отправку после запуска нельзя.')
+            ->modalDescription(fn (Broadcast $record) => 'Сообщение получат '
+                .app(BroadcastService::class)->recipientsCount($record->bot_id)
+                ." пользователей бота «{$record->bot?->name}». Отменить отправку после запуска нельзя.")
             ->modalSubmitActionLabel('Запустить')
             ->action(function (Broadcast $record) {
                 app(BroadcastService::class)->queue($record);

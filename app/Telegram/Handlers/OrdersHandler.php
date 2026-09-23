@@ -14,12 +14,14 @@ class OrdersHandler
     {
         $orders = BotContext::user($bot)
             ->orders()
+            ->with('items.service')
             ->latest()
             ->limit(10)
             ->get();
 
-        $text = $orders->isEmpty() ? Texts::noOrders() : Texts::orders($orders);
+        $botModel = BotContext::bot($bot);
+        $text = $orders->isEmpty() ? Texts::noOrders() : Texts::orders($orders, $botModel);
 
-        Screen::show($bot, $text, Keyboards::myOrders($orders));
+        Screen::show($bot, $text, Keyboards::myOrders($orders, $botModel));
     }
 }

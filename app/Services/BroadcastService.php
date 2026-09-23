@@ -17,7 +17,7 @@ class BroadcastService
     {
         $broadcast->forceFill([
             'status' => BroadcastStatus::Queued,
-            'recipients_count' => $this->recipientsCount(),
+            'recipients_count' => $this->recipientsCount($broadcast->bot_id),
             'sent_count' => 0,
             'failed_count' => 0,
             'started_at' => null,
@@ -29,8 +29,14 @@ class BroadcastService
         return $broadcast;
     }
 
-    public function recipientsCount(): int
+    /**
+     * Получатели — подписчики бота рассылки: пишет каждый бот только своим.
+     */
+    public function recipientsCount(?int $botId): int
     {
-        return TelegramUser::query()->subscribed()->count();
+        return TelegramUser::query()
+            ->when($botId, fn ($query) => $query->where('bot_id', $botId))
+            ->subscribed()
+            ->count();
     }
 }

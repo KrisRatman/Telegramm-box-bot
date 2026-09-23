@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ServiceCategories\Schemas;
 
+use App\Filament\Support\TranslationFields;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -38,6 +39,7 @@ class ServiceCategoryForm
                 Toggle::make('is_active')
                     ->label('Показывать в боте')
                     ->default(true),
+                ...TranslationFields::sections('Показывается над списком услуг.'),
             ]);
     }
 }

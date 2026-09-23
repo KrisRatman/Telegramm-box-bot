@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Bot;
 use App\Models\Service;
 use App\Models\ServiceCategory;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -26,6 +27,17 @@ class ServiceFactory extends Factory
             'sort_order' => 0,
             'is_active' => true,
         ];
+    }
+
+    /**
+     * Как в админке: новая услуга продаётся во всех существующих ботах.
+     * Боты, созданные позже, подхватывают каталог сами (Bot::created).
+     */
+    public function configure(): static
+    {
+        return $this->afterCreating(function (Service $service) {
+            $service->bots()->syncWithoutDetaching(Bot::query()->pluck('id'));
+        });
     }
 
     public function inactive(): static

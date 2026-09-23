@@ -15,6 +15,7 @@ class Broadcast extends Model
     use HasFactory;
 
     protected $fillable = [
+        'bot_id',
         'title',
         'message',
         'status',
@@ -36,6 +37,12 @@ class Broadcast extends Model
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
         ];
+    }
+
+    /** @return BelongsTo<Bot, $this> */
+    public function bot(): BelongsTo
+    {
+        return $this->belongsTo(Bot::class);
     }
 
     /** @return BelongsTo<User, $this> */

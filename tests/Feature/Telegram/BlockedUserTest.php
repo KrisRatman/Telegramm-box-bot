@@ -4,6 +4,7 @@ namespace Tests\Feature\Telegram;
 
 use App\Models\TelegramUser;
 use App\Services\Telegram\BotMessenger;
+use App\Telegram\BotManager;
 use GuzzleHttp\Psr7\Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use SergiX44\Nutgram\Nutgram;
@@ -21,7 +22,7 @@ class BlockedUserTest extends TestCase
     {
         $user = TelegramUser::factory()->create(['is_blocked' => false]);
 
-        $messenger = new BotMessenger($this->botAnswering(403, 'Forbidden: bot was blocked by the user'));
+        $messenger = $this->messengerFor($this->botAnswering(403, 'Forbidden: bot was blocked by the user'));
 
         $this->assertFalse($messenger->sendToUser($user, 'Привет'));
         $this->assertTrue($user->fresh()->is_blocked);
@@ -32,7 +33,7 @@ class BlockedUserTest extends TestCase
     {
         $user = TelegramUser::factory()->create(['is_blocked' => false]);
 
-        $messenger = new BotMessenger($this->botAnswering(403, 'Forbidden: user is deactivated'));
+        $messenger = $this->messengerFor($this->botAnswering(403, 'Forbidden: user is deactivated'));
 
         $messenger->sendToUser($user, 'Привет');
 
@@ -43,7 +44,7 @@ class BlockedUserTest extends TestCase
     {
         $user = TelegramUser::factory()->create(['is_blocked' => false]);
 
-        $messenger = new BotMessenger($this->botAnswering(400, 'Bad Request: message text is empty'));
+        $messenger = $this->messengerFor($this->botAnswering(400, 'Bad Request: message text is empty'));
 
         $this->assertFalse($messenger->sendToUser($user, ''));
         $this->assertFalse($user->fresh()->is_blocked);
@@ -55,9 +56,14 @@ class BlockedUserTest extends TestCase
 
         $bot = Nutgram::fake();
 
-        $this->assertTrue((new BotMessenger($bot))->sendToUser($user, 'Снова на связи'));
+        $this->assertTrue($this->messengerFor($bot)->sendToUser($user, 'Снова на связи'));
         $this->assertFalse($user->fresh()->is_blocked);
         $this->assertSame(1, $user->messages()->count());
+    }
+
+    private function messengerFor(Nutgram $fake): BotMessenger
+    {
+        return new BotMessenger(new BotManager(app(), fn () => $fake));
     }
 
     private function botAnswering(int $errorCode, string $description): Nutgram

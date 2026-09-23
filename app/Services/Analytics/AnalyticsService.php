@@ -29,11 +29,12 @@ class AnalyticsService
 
         return [
             'new_users' => $funnel[0]['users'],
-            'active_users' => TelegramUser::query()
+            'active_users' => $this->usersOf($period)
                 ->whereBetween('last_activity_at', [$period->from, $period->to])
                 ->count(),
             'orders' => (clone $orders)->count(),
             'revenue' => (float) Payment::query()
+                ->when($period->botId, fn (Builder $query, int $botId) => $query->whereHas('order', fn (Builder $order) => $order->where('bot_id', $botId)))
                 ->where('status', PaymentStatus::Paid)
                 ->whereBetween('paid_at', [$period->from, $period->to])
                 ->sum('amount'),
@@ -56,7 +57,7 @@ class AnalyticsService
      */
     public function funnel(Period $period): array
     {
-        $cohort = fn (): Builder => TelegramUser::query()->whereBetween('created_at', [$period->from, $period->to]);
+        $cohort = fn (): Builder => $this->usersOf($period)->whereBetween('created_at', [$period->from, $period->to]);
 
         $ordered = fn (Builder $query) => $query->whereHas('orders');
         $paid = fn (Builder $query) => $query->whereHas('orders', fn (Builder $orders) => $orders->whereNotNull('paid_at'));
@@ -82,7 +83,7 @@ class AnalyticsService
     public function newUsersByDay(Period $period): array
     {
         return $this->countByDay(
-            TelegramUser::query()->whereBetween('created_at', [$period->from, $period->to]),
+            $this->usersOf($period)->whereBetween('created_at', [$period->from, $period->to]),
             $period,
         );
     }
@@ -115,6 +116,7 @@ class AnalyticsService
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->whereBetween('orders.created_at', [$period->from, $period->to])
             ->where('orders.status', '!=', OrderStatus::Cancelled->value)
+            ->when($period->botId, fn ($query, int $botId) => $query->where('orders.bot_id', $botId))
             ->groupBy('order_items.service_name')
             ->select('order_items.service_name')
             ->selectRaw('SUM(order_items.quantity) as quantity')
@@ -135,7 +137,17 @@ class AnalyticsService
      */
     private function ordersIn(Period $period): Builder
     {
-        return Order::query()->whereBetween('created_at', [$period->from, $period->to]);
+        return Order::query()
+            ->whereBetween('created_at', [$period->from, $period->to])
+            ->when($period->botId, fn (Builder $query, int $botId) => $query->where('bot_id', $botId));
+    }
+
+    /**
+     * @return Builder<TelegramUser>
+     */
+    private function usersOf(Period $period): Builder
+    {
+        return TelegramUser::query()->when($period->botId, fn (Builder $query, int $botId) => $query->where('bot_id', $botId));
     }
 
     /**

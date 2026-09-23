@@ -10,6 +10,8 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             AdminUserSeeder::class,
+            // Бот раньше каталога: каталог привязывается ко всем существующим ботам.
+            BotSeeder::class,
             CatalogSeeder::class,
         ]);
     }

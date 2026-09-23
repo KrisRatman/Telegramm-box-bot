@@ -5,13 +5,15 @@ namespace App\Telegram\Middleware;
 use App\Enums\MessageDirection;
 use App\Models\BotMessage;
 use App\Models\TelegramUser;
+use App\Telegram\Support\BotContext;
 use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Telegram\Properties\UpdateType;
 
 /**
  * Глобальная middleware: на каждом апдейте заводит или обновляет запись
- * пользователя, кладёт её в контекст апдейта под ключом telegram_user
- * и пишет входящие сообщения в историю переписки.
+ * пользователя в пределах бота, кладёт её в контекст апдейта под ключом
+ * telegram_user, включает язык пользователя и пишет входящие сообщения
+ * в историю переписки.
  */
 class TrackTelegramUser
 {
@@ -26,7 +28,7 @@ class TrackTelegramUser
         }
 
         $user = TelegramUser::updateOrCreate(
-            ['chat_id' => $from->id],
+            ['bot_id' => BotContext::bot($bot)->id, 'chat_id' => $from->id],
             [
                 'username' => $from->username,
                 'first_name' => $from->first_name,
@@ -39,6 +41,9 @@ class TrackTelegramUser
         );
 
         $bot->set('telegram_user', $user);
+
+        // Все тексты и кнопки ответа — на языке пользователя.
+        app()->setLocale($user->preferredLocale());
 
         $this->logIncoming($bot, $user);
 

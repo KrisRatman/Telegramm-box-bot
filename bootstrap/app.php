@@ -16,12 +16,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // авторизуется подписанным initData в заголовке, а не cookie, поэтому
         // подделать запрос с чужого сайта через CSRF там нельзя.
         $middleware->validateCsrfTokens(except: [
-            'telegram/webhook',
-            'app/api/*',
+            'telegram/webhook/*',
+            'app/*/api/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*', 'app/api/*') || $request->expectsJson(),
+            fn (Request $request) => $request->is('api/*', 'app/*/api/*') || $request->expectsJson(),
         );
     })->create();

@@ -20,6 +20,7 @@ class Order extends Model
 
     protected $fillable = [
         'number',
+        'bot_id',
         'telegram_user_id',
         'service_id',
         'service_name',
@@ -54,6 +55,9 @@ class Order extends Model
     {
         static::creating(function (Order $order) {
             $order->number ??= static::generateNumber();
+            // Бот заявки — бот клиента. Хранится в заявке, чтобы фильтр
+            // и аналитика по боту не ходили через join с пользователями.
+            $order->bot_id ??= $order->telegramUser?->bot_id;
         });
     }
 
@@ -73,6 +77,12 @@ class Order extends Model
         } while (static::query()->where('number', $number)->exists());
 
         return $number;
+    }
+
+    /** @return BelongsTo<Bot, $this> */
+    public function bot(): BelongsTo
+    {
+        return $this->belongsTo(Bot::class);
     }
 
     /** @return BelongsTo<TelegramUser, $this> */

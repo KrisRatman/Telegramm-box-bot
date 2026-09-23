@@ -30,10 +30,10 @@ class OrderConversation extends Conversation
 
     public function start(Nutgram $bot, int $serviceId): void
     {
-        $service = Service::query()->active()->find($serviceId);
+        $service = Service::query()->orderable(BotContext::bot($bot))->find($serviceId);
 
         if ($service === null) {
-            $bot->answerCallbackQuery(text: 'Услуга больше недоступна.', show_alert: true);
+            $bot->answerCallbackQuery(text: __('bot.order.service_unavailable'), show_alert: true);
             $this->end();
 
             return;
@@ -62,7 +62,7 @@ class OrderConversation extends Conversation
         $name = trim((string) $bot->message()?->text);
 
         if ($name === '' || mb_strlen($name) > 100) {
-            $bot->sendMessage('Введите имя текстом — до 100 символов.');
+            $bot->sendMessage(__('bot.order.invalid_name'));
 
             return;
         }
@@ -88,7 +88,7 @@ class OrderConversation extends Conversation
             ?? trim((string) $bot->message()?->text);
 
         if (! $this->isValidPhone($phone)) {
-            $bot->sendMessage('Не похоже на номер телефона. Пример: +7 900 123-45-67');
+            $bot->sendMessage(__('bot.order.invalid_phone'));
 
             return;
         }
@@ -113,10 +113,10 @@ class OrderConversation extends Conversation
         $comment = trim((string) $bot->message()?->text);
         $this->comment = ($comment === '' || $comment === '-') ? null : mb_substr($comment, 0, 1000);
 
-        $service = Service::find($this->serviceId);
+        $service = Service::query()->orderable(BotContext::bot($bot))->find($this->serviceId);
 
         if ($service === null) {
-            $bot->sendMessage('Услуга больше недоступна. Начните заново: /start');
+            $bot->sendMessage(__('bot.order.service_unavailable_restart'));
             $this->end();
 
             return;
@@ -142,15 +142,15 @@ class OrderConversation extends Conversation
         }
 
         if ($data !== 'order:confirm') {
-            $bot->sendMessage('Нажмите «Подтвердить» или «Отменить».');
+            $bot->sendMessage(__('bot.order.press_confirm'));
 
             return;
         }
 
-        $service = Service::find($this->serviceId);
+        $service = Service::query()->orderable(BotContext::bot($bot))->find($this->serviceId);
 
         if ($service === null) {
-            $bot->answerCallbackQuery(text: 'Услуга больше недоступна.', show_alert: true);
+            $bot->answerCallbackQuery(text: __('bot.order.service_unavailable'), show_alert: true);
             $this->end();
 
             return;
@@ -193,7 +193,7 @@ class OrderConversation extends Conversation
         }
 
         $bot->answerCallbackQuery(
-            text: 'Сначала завершите оформление заявки или нажмите «Отменить».',
+            text: __('bot.order.finish_first'),
             show_alert: true,
         );
 
@@ -211,7 +211,7 @@ class OrderConversation extends Conversation
         $bot->sendMessage(
             text: Texts::mainMenu(),
             parse_mode: ParseMode::HTML,
-            reply_markup: Keyboards::mainMenu(),
+            reply_markup: Keyboards::mainMenu(BotContext::bot($bot)),
         );
 
         $this->end();

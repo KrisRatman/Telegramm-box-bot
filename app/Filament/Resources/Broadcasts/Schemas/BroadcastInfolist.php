@@ -16,6 +16,7 @@ class BroadcastInfolist
                     ->columns(3)
                     ->schema([
                         TextEntry::make('title')->label('Название')->weight('bold'),
+                        TextEntry::make('bot.name')->label('Бот'),
                         TextEntry::make('status')->label('Статус')->badge(),
                         TextEntry::make('author.name')->label('Автор')->placeholder('—'),
                         TextEntry::make('message')->label('Текст')->columnSpanFull(),

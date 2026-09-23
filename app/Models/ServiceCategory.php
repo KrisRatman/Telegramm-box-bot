@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTranslations;
 use Database\Factories\ServiceCategoryFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,12 +12,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class ServiceCategory extends Model
 {
     /** @use HasFactory<ServiceCategoryFactory> */
-    use HasFactory;
+    use HasFactory, HasTranslations;
 
     protected $fillable = [
         'name',
         'slug',
         'description',
+        'translations',
         'sort_order',
         'is_active',
     ];

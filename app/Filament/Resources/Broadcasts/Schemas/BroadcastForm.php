@@ -2,10 +2,13 @@
 
 namespace App\Filament\Resources\Broadcasts\Schemas;
 
+use App\Models\Bot;
 use App\Services\BroadcastService;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
 class BroadcastForm
@@ -15,8 +18,17 @@ class BroadcastForm
         return $schema
             ->components([
                 Section::make('Сообщение')
-                    ->description(fn () => 'Получателей сейчас: '.app(BroadcastService::class)->recipientsCount())
+                    ->description(fn (Get $get) => $get('bot_id')
+                        ? 'Получателей сейчас: '.app(BroadcastService::class)->recipientsCount((int) $get('bot_id'))
+                        : 'Выберите бота — рассылка уходит только его подписчикам.')
                     ->schema([
+                        Select::make('bot_id')
+                            ->label('Бот')
+                            ->relationship('bot', 'name')
+                            ->default(fn () => Bot::query()->count() === 1 ? Bot::query()->value('id') : null)
+                            ->required()
+                            ->live()
+                            ->native(false),
                         TextInput::make('title')
                             ->label('Название')
                             ->required()

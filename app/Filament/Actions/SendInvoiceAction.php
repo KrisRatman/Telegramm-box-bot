@@ -20,7 +20,7 @@ class SendInvoiceAction
             ->label('Отправить счёт')
             ->icon(Heroicon::OutlinedCreditCard)
             ->color('success')
-            ->visible(fn (Order $record) => PaymentService::enabled() && $record->canBePaid())
+            ->visible(fn (Order $record) => (bool) $record->bot?->paymentsEnabled() && $record->canBePaid())
             ->requiresConfirmation()
             ->modalHeading('Отправить счёт клиенту')
             ->modalDescription(fn (Order $record) => "Клиент получит в боте счёт на {$record->formatted_price} по заявке №{$record->number}.")

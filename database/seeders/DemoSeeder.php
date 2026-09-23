@@ -7,6 +7,7 @@ use App\Enums\MessageDirection;
 use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
+use App\Models\Bot;
 use App\Models\BotEvent;
 use App\Models\BotMessage;
 use App\Models\Order;
@@ -29,6 +30,8 @@ class DemoSeeder extends Seeder
 
     public function run(): void
     {
+        [$mainBot, $branchBot] = $this->seedBots();
+
         $services = Service::query()->active()->get();
 
         if ($services->isEmpty()) {
@@ -48,7 +51,7 @@ class DemoSeeder extends Seeder
 
         foreach ($people as $index => [$first, $last, $username, $phone]) {
             $user = TelegramUser::updateOrCreate(
-                ['chat_id' => 700000000 + $index],
+                ['bot_id' => $mainBot->id, 'chat_id' => 700000000 + $index],
                 [
                     'first_name' => $first,
                     'last_name' => $last,
@@ -101,7 +104,37 @@ class DemoSeeder extends Seeder
             }
         }
 
-        $this->seedFunnelHistory($services);
+        $this->seedFunnelHistory($services, $mainBot, $branchBot);
+    }
+
+    /**
+     * Основной бот — настоящий из .env, если он уже заведён, иначе демо.
+     * Второй бот нужен, чтобы в админке было что фильтровать. У демо-ботов
+     * ненастоящие токены, поэтому они выключены: команды и webhook их не трогают.
+     *
+     * @return array{0: Bot, 1: Bot}
+     */
+    private function seedBots(): array
+    {
+        $main = Bot::query()->orderBy('id')->first() ?? Bot::create([
+            'name' => 'Демо: студия',
+            'username' => 'demo_studio_bot',
+            'token' => '000000001:demo-token-not-real',
+            'default_locale' => 'ru',
+            'is_active' => false,
+        ]);
+
+        $branch = Bot::query()->firstOrCreate(
+            ['name' => 'Демо: Dubai branch'],
+            [
+                'username' => 'demo_dubai_bot',
+                'token' => '000000002:demo-token-not-real',
+                'default_locale' => 'en',
+                'is_active' => false,
+            ],
+        );
+
+        return [$main, $branch];
     }
 
     /**
@@ -111,7 +144,7 @@ class DemoSeeder extends Seeder
      *
      * @param  Collection<int, Service>  $services
      */
-    private function seedFunnelHistory(Collection $services): void
+    private function seedFunnelHistory(Collection $services, Bot $mainBot, Bot $branchBot): void
     {
         // Повторный запуск сидера историю не дублирует.
         if (TelegramUser::query()->where('chat_id', 710000000)->exists()) {
@@ -125,12 +158,15 @@ class DemoSeeder extends Seeder
         foreach (range(0, 59) as $i) {
             $cameAt = now()->subDays($random->getInt(0, 29))->setTime($random->getInt(9, 21), $random->getInt(0, 59));
             $source = $chance(45) ? OrderSource::MiniApp : OrderSource::Bot;
+            // Треть истории — во втором боте, там клиенты в основном англоязычные.
+            $inBranch = $i % 3 === 0;
             $name = $names[$i % count($names)];
 
             $user = TelegramUser::query()->forceCreate([
+                'bot_id' => $inBranch ? $branchBot->id : $mainBot->id,
                 'chat_id' => 710000000 + $i,
                 'first_name' => $name,
-                'language_code' => 'ru',
+                'language_code' => $inBranch ? 'en' : 'ru',
                 'is_blocked' => false,
                 'last_activity_at' => $cameAt->copy()->addMinutes(20),
                 'created_at' => $cameAt,

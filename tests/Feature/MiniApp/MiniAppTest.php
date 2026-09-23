@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\MiniApp;
 
+use App\Models\Bot;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\ServiceCategory;
@@ -22,15 +23,16 @@ class MiniAppTest extends TestCase
 
     private const ADMIN_CHAT_ID = 111;
 
+    private Bot $botModel;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        config([
-            'nutgram.token' => self::BOT_TOKEN,
-            'telegram.admin_chat_ids' => [(string) self::ADMIN_CHAT_ID],
-            'telegram.payments.provider_token' => null,
-        ]);
+        config(['telegram.admin_chat_ids' => [(string) self::ADMIN_CHAT_ID]]);
+
+        // initData подписывается токеном именно этого бота.
+        $this->botModel = Bot::factory()->create(['token' => self::BOT_TOKEN]);
     }
 
     // --- Страница ------------------------------------------------------------
@@ -45,7 +47,7 @@ class MiniAppTest extends TestCase
             ->for(ServiceCategory::factory()->state(['is_active' => false]), 'category')
             ->create(['name' => 'Услуга из скрытой категории']);
 
-        $this->get('/app')
+        $this->get("/app/{$this->botModel->id}")
             ->assertOk()
             ->assertSee('Лендинг под ключ')
             ->assertDontSee('Снятая услуга')
@@ -56,7 +58,7 @@ class MiniAppTest extends TestCase
 
     public function test_api_rejects_request_without_init_data(): void
     {
-        $this->getJson('/app/api/profile')
+        $this->getJson($this->api('profile'))
             ->assertUnauthorized()
             ->assertJson(['message' => 'Откройте каталог из Telegram-бота.']);
     }
@@ -71,14 +73,14 @@ class MiniAppTest extends TestCase
         );
         $this->assertNotSame($signed, $initData);
 
-        $this->getJson('/app/api/profile', ['X-Telegram-Init-Data' => $initData])->assertUnauthorized();
+        $this->getJson($this->api('profile'), ['X-Telegram-Init-Data' => $initData])->assertUnauthorized();
 
         $this->assertDatabaseMissing('telegram_users', ['chat_id' => 999]);
     }
 
     public function test_api_rejects_init_data_signed_with_another_token(): void
     {
-        $this->getJson('/app/api/profile', [
+        $this->getJson($this->api('profile'), [
             'X-Telegram-Init-Data' => $this->initData(token: '654321:other-bot'),
         ])->assertUnauthorized();
     }
@@ -87,20 +89,20 @@ class MiniAppTest extends TestCase
     {
         config(['telegram.mini_app.auth_ttl' => 3600]);
 
-        $this->getJson('/app/api/profile', [
+        $this->getJson($this->api('profile'), [
             'X-Telegram-Init-Data' => $this->initData(authDate: now()->subHours(2)->timestamp),
         ])->assertUnauthorized();
     }
 
     public function test_profile_registers_new_user_and_returns_saved_phone(): void
     {
-        $this->getJson('/app/api/profile', $this->headers())
+        $this->getJson($this->api('profile'), $this->headers())
             ->assertOk()
-            ->assertExactJson(['name' => 'Иван', 'phone' => null]);
+            ->assertExactJson(['name' => 'Иван', 'phone' => null, 'locale' => 'ru']);
 
         TelegramUser::query()->where('chat_id', self::CHAT_ID)->update(['phone' => '+79001234567']);
 
-        $this->getJson('/app/api/profile', $this->headers())
+        $this->getJson($this->api('profile'), $this->headers())
             ->assertOk()
             ->assertJsonPath('phone', '+79001234567');
 
@@ -114,7 +116,7 @@ class MiniAppTest extends TestCase
         $landing = Service::factory()->create(['name' => 'Лендинг', 'price' => 20000]);
         $support = Service::factory()->create(['name' => 'Поддержка', 'price' => 3000]);
 
-        $response = $this->postJson('/app/api/orders', [
+        $response = $this->postJson($this->api('orders'), [
             'items' => [
                 // Цена с фронта должна игнорироваться.
                 ['service_id' => $landing->id, 'quantity' => 1, 'price' => 1],
@@ -148,7 +150,7 @@ class MiniAppTest extends TestCase
     {
         $service = Service::factory()->create(['name' => 'Лендинг', 'price' => 20000]);
 
-        $this->postJson('/app/api/orders', $this->orderPayload([$service->id => 2]), $this->headers())
+        $this->postJson($this->api('orders'), $this->orderPayload([$service->id => 2]), $this->headers())
             ->assertCreated();
 
         $messages = collect($this->requestsTo(app(Nutgram::class), 'sendMessage'));
@@ -165,7 +167,7 @@ class MiniAppTest extends TestCase
     {
         $service = Service::factory()->create(['name' => 'Лендинг']);
 
-        $this->postJson('/app/api/orders', $this->orderPayload([$service->id => 1]), $this->headers())
+        $this->postJson($this->api('orders'), $this->orderPayload([$service->id => 1]), $this->headers())
             ->assertCreated();
 
         $order = Order::query()->sole();
@@ -181,7 +183,7 @@ class MiniAppTest extends TestCase
             ->for(ServiceCategory::factory()->state(['is_active' => false]), 'category')
             ->create();
 
-        $this->postJson('/app/api/orders', $this->orderPayload([$available->id => 1, $hidden->id => 1]), $this->headers())
+        $this->postJson($this->api('orders'), $this->orderPayload([$available->id => 1, $hidden->id => 1]), $this->headers())
             ->assertUnprocessable()
             ->assertJsonValidationErrors([
                 'items' => 'Часть услуг больше недоступна. Обновите каталог и проверьте корзину.',
@@ -192,7 +194,7 @@ class MiniAppTest extends TestCase
 
     public function test_order_requires_cart_and_contacts(): void
     {
-        $this->postJson('/app/api/orders', [], $this->headers())
+        $this->postJson($this->api('orders'), [], $this->headers())
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['items', 'contact_name', 'contact_phone']);
     }
@@ -201,7 +203,7 @@ class MiniAppTest extends TestCase
     {
         $service = Service::factory()->create();
 
-        $this->postJson('/app/api/orders', $this->orderPayload([$service->id => 1], phone: '12-34'), $this->headers())
+        $this->postJson($this->api('orders'), $this->orderPayload([$service->id => 1], phone: '12-34'), $this->headers())
             ->assertUnprocessable()
             ->assertJsonValidationErrors([
                 'contact_phone' => 'Укажите телефон полностью, например +7 900 123-45-67.',
@@ -210,13 +212,13 @@ class MiniAppTest extends TestCase
 
     public function test_order_returns_itemized_invoice_link_when_payments_enabled(): void
     {
-        config(['telegram.payments.provider_token' => 'test-provider-token']);
+        $this->botModel->update(['payment_provider_token' => 'test-provider-token']);
 
         $landing = Service::factory()->create(['name' => 'Лендинг', 'price' => 20000]);
         $support = Service::factory()->create(['name' => 'Поддержка', 'price' => 3000]);
 
         $response = $this->postJson(
-            '/app/api/orders',
+            $this->api('orders'),
             $this->orderPayload([$landing->id => 1, $support->id => 3]),
             $this->headers(),
         )->assertCreated();
@@ -237,7 +239,7 @@ class MiniAppTest extends TestCase
 
     public function test_invoice_falls_back_to_single_line_after_manual_price_change(): void
     {
-        config(['telegram.payments.provider_token' => 'test-provider-token']);
+        $this->botModel->update(['payment_provider_token' => 'test-provider-token']);
 
         $order = Order::factory()->create(['service_name' => 'Лендинг и ещё 1', 'price' => 23000]);
         $order->items()->createMany([
@@ -260,7 +262,7 @@ class MiniAppTest extends TestCase
 
     public function test_main_menu_opens_mini_app_when_https_url_is_set(): void
     {
-        config(['telegram.mini_app.url' => 'https://example.test/app']);
+        config(['telegram.mini_app.url' => 'https://example.test']);
 
         $bot = $this->fakeBot(self::CHAT_ID);
         $bot->hearText('/start')->reply();
@@ -268,14 +270,14 @@ class MiniAppTest extends TestCase
         $keyboard = $this->requestsTo($bot, 'sendMessage')[0]['reply_markup']['inline_keyboard'];
 
         $this->assertSame(
-            ['text' => '🛒 Каталог и корзина', 'web_app' => ['url' => 'https://example.test/app']],
+            ['text' => '🛒 Каталог и корзина', 'web_app' => ['url' => "https://example.test/app/{$this->botModel->id}"]],
             $keyboard[0][0],
         );
     }
 
     public function test_main_menu_hides_mini_app_for_http_url(): void
     {
-        config(['telegram.mini_app.url' => 'http://localhost/app']);
+        config(['telegram.mini_app.url' => 'http://localhost']);
 
         $bot = $this->fakeBot(self::CHAT_ID);
         $bot->hearText('/start')->reply();
@@ -287,6 +289,11 @@ class MiniAppTest extends TestCase
     }
 
     // --- Помощники -----------------------------------------------------------
+
+    private function api(string $endpoint): string
+    {
+        return "/app/{$this->botModel->id}/api/{$endpoint}";
+    }
 
     /**
      * initData, подписанный по алгоритму из документации Telegram.

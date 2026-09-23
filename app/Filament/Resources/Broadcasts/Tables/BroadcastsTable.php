@@ -20,6 +20,11 @@ class BroadcastsTable
             ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('title')->label('Название')->searchable()->weight('bold'),
+                TextColumn::make('bot.name')
+                    ->label('Бот')
+                    ->badge()
+                    ->color('gray')
+                    ->toggleable(),
                 TextColumn::make('status')->label('Статус')->badge(),
                 TextColumn::make('recipients_count')->label('Получателей'),
                 TextColumn::make('sent_count')->label('Доставлено')->color('success'),
@@ -29,6 +34,10 @@ class BroadcastsTable
                 TextColumn::make('created_at')->label('Создана')->dateTime('d.m.Y H:i')->sortable(),
             ])
             ->filters([
+                SelectFilter::make('bot')
+                    ->label('Бот')
+                    ->relationship('bot', 'name')
+                    ->preload(),
                 SelectFilter::make('status')
                     ->label('Статус')
                     ->options(BroadcastStatus::class),

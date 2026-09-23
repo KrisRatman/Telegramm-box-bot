@@ -2,10 +2,10 @@
 
 namespace App\Telegram\Support;
 
+use App\Models\Bot;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\ServiceCategory;
-use App\Services\PaymentService;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\KeyboardButton;
@@ -15,32 +15,42 @@ use SergiX44\Nutgram\Telegram\Types\WebApp\WebAppInfo;
 
 /**
  * Инлайн-клавиатуры бота. Схема callback_data: "раздел:действие:параметр".
+ * Подписи переводятся на текущий язык, как и тексты.
  */
 class Keyboards
 {
-    public static function mainMenu(): InlineKeyboardMarkup
+    /** Языки для /language: код => подпись на самом языке. */
+    public const LANGUAGES = [
+        'ru' => '🇷🇺 Русский',
+        'en' => '🇬🇧 English',
+    ];
+
+    public static function mainMenu(Bot $bot): InlineKeyboardMarkup
     {
         $keyboard = InlineKeyboardMarkup::make();
 
-        if ($url = self::miniAppUrl()) {
-            $keyboard->addRow(InlineKeyboardButton::make('🛒 Каталог и корзина', web_app: WebAppInfo::make($url)));
+        if ($url = $bot->miniAppUrl()) {
+            $keyboard->addRow(InlineKeyboardButton::make(__('bot.buttons.mini_app'), web_app: WebAppInfo::make($url)));
         }
 
         return $keyboard
-            ->addRow(InlineKeyboardButton::make('🛍 Каталог услуг', callback_data: 'catalog:list'))
-            ->addRow(InlineKeyboardButton::make('📋 Мои заявки', callback_data: 'orders:my'))
-            ->addRow(InlineKeyboardButton::make('ℹ️ О нас и контакты', callback_data: 'menu:help'));
+            ->addRow(InlineKeyboardButton::make(__('bot.buttons.catalog'), callback_data: 'catalog:list'))
+            ->addRow(InlineKeyboardButton::make(__('bot.buttons.my_orders'), callback_data: 'orders:my'))
+            ->addRow(
+                InlineKeyboardButton::make(__('bot.buttons.about'), callback_data: 'menu:help'),
+                InlineKeyboardButton::make(__('bot.buttons.language'), callback_data: 'lang:choose'),
+            );
     }
 
-    /**
-     * Адрес Mini App или null, если он не задан. Telegram открывает
-     * Mini App только по https, с http-адресом кнопка сломала бы всё меню.
-     */
-    public static function miniAppUrl(): ?string
+    public static function languages(): InlineKeyboardMarkup
     {
-        $url = (string) config('telegram.mini_app.url');
+        $keyboard = InlineKeyboardMarkup::make();
 
-        return str_starts_with($url, 'https://') ? $url : null;
+        foreach (self::LANGUAGES as $code => $label) {
+            $keyboard->addRow(InlineKeyboardButton::make($label, callback_data: "lang:set:{$code}"));
+        }
+
+        return $keyboard;
     }
 
     /**
@@ -52,7 +62,7 @@ class Keyboards
 
         foreach ($categories as $category) {
             $keyboard->addRow(InlineKeyboardButton::make(
-                $category->name,
+                $category->translated('name'),
                 callback_data: "catalog:category:{$category->id}",
             ));
         }
@@ -69,7 +79,7 @@ class Keyboards
 
         foreach ($services as $service) {
             $keyboard->addRow(InlineKeyboardButton::make(
-                "{$service->name} — {$service->formatted_price}",
+                $service->translated('name')." — {$service->formatted_price}",
                 callback_data: "catalog:service:{$service->id}",
             ));
         }
@@ -80,10 +90,7 @@ class Keyboards
     public static function serviceCard(Service $service): InlineKeyboardMarkup
     {
         return InlineKeyboardMarkup::make()
-            ->addRow(InlineKeyboardButton::make(
-                '✅ Оставить заявку',
-                callback_data: "order:create:{$service->id}",
-            ))
+            ->addRow(InlineKeyboardButton::make(__('bot.buttons.order'), callback_data: "order:create:{$service->id}"))
             ->addRow(self::backButton("catalog:category:{$service->service_category_id}"));
     }
 
@@ -94,8 +101,8 @@ class Keyboards
     {
         $keyboard = InlineKeyboardMarkup::make();
 
-        if (PaymentService::enabled() && $order->canBePaid()) {
-            $keyboard->addRow(self::payButton($order, "💳 Оплатить {$order->formatted_price}"));
+        if ($order->bot?->paymentsEnabled() && $order->canBePaid()) {
+            $keyboard->addRow(self::payButton($order, __('bot.buttons.pay_amount', ['amount' => $order->formatted_price])));
         }
 
         return $keyboard->addRow(self::backButton('menu:main'));
@@ -106,14 +113,14 @@ class Keyboards
      *
      * @param  iterable<Order>  $orders
      */
-    public static function myOrders(iterable $orders): InlineKeyboardMarkup
+    public static function myOrders(iterable $orders, Bot $bot): InlineKeyboardMarkup
     {
         $keyboard = InlineKeyboardMarkup::make();
 
-        if (PaymentService::enabled()) {
+        if ($bot->paymentsEnabled()) {
             foreach ($orders as $order) {
                 if ($order->canBePaid()) {
-                    $keyboard->addRow(self::payButton($order, "💳 Оплатить №{$order->number}"));
+                    $keyboard->addRow(self::payButton($order, __('bot.buttons.pay_number', ['number' => $order->number])));
                 }
             }
         }
@@ -129,14 +136,14 @@ class Keyboards
     public static function cancelOrder(): InlineKeyboardMarkup
     {
         return InlineKeyboardMarkup::make()
-            ->addRow(InlineKeyboardButton::make('✖️ Отменить заявку', callback_data: 'order:cancel'));
+            ->addRow(InlineKeyboardButton::make(__('bot.buttons.cancel_order'), callback_data: 'order:cancel'));
     }
 
     public static function confirmOrder(): InlineKeyboardMarkup
     {
         return InlineKeyboardMarkup::make()
-            ->addRow(InlineKeyboardButton::make('✅ Подтвердить', callback_data: 'order:confirm'))
-            ->addRow(InlineKeyboardButton::make('✖️ Отменить', callback_data: 'order:cancel'));
+            ->addRow(InlineKeyboardButton::make(__('bot.buttons.confirm'), callback_data: 'order:confirm'))
+            ->addRow(InlineKeyboardButton::make(__('bot.buttons.cancel'), callback_data: 'order:cancel'));
     }
 
     /**
@@ -146,7 +153,7 @@ class Keyboards
     public static function requestPhone(): ReplyKeyboardMarkup
     {
         return ReplyKeyboardMarkup::make(resize_keyboard: true, one_time_keyboard: true)
-            ->addRow(KeyboardButton::make('📱 Отправить мой номер', request_contact: true));
+            ->addRow(KeyboardButton::make(__('bot.buttons.share_phone'), request_contact: true));
     }
 
     public static function removeReplyKeyboard(): ReplyKeyboardRemove
@@ -161,6 +168,6 @@ class Keyboards
 
     public static function backButton(string $callbackData): InlineKeyboardButton
     {
-        return InlineKeyboardButton::make('⬅️ Назад', callback_data: $callbackData);
+        return InlineKeyboardButton::make(__('bot.buttons.back'), callback_data: $callbackData);
     }
 }

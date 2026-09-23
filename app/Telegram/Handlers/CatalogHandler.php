@@ -19,7 +19,7 @@ class CatalogHandler
     {
         $categories = ServiceCategory::query()
             ->active()
-            ->whereHas('services', fn ($query) => $query->active())
+            ->whereHas('services', fn ($query) => $query->orderable(BotContext::bot($bot)))
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
@@ -46,7 +46,7 @@ class CatalogHandler
         }
 
         $services = $category->services()
-            ->active()
+            ->orderable(BotContext::bot($bot))
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
@@ -57,14 +57,14 @@ class CatalogHandler
             return;
         }
 
-        $text = "<b>{$category->name}</b>\n\n".($category->description ?: 'Выберите услугу:');
+        $text = Texts::category($category->translated('name'), $category->translated('description'));
 
         Screen::show($bot, $text, Keyboards::services($services));
     }
 
     public function card(Nutgram $bot, string $serviceId): void
     {
-        $service = Service::query()->active()->find((int) $serviceId);
+        $service = Service::query()->orderable(BotContext::bot($bot))->find((int) $serviceId);
 
         if ($service === null) {
             $this->categories($bot);

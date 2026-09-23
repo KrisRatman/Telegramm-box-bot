@@ -2,6 +2,9 @@
 
 namespace App\Filament\Resources\Services\Schemas;
 
+use App\Filament\Support\TranslationFields;
+use App\Models\Bot;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -62,6 +65,18 @@ class ServiceForm
                             ->label('Показывать в боте')
                             ->default(true),
                     ]),
+                Section::make('Боты')
+                    ->description('В каких ботах продаётся услуга. Каталог общий, но у каждого бота может быть свой набор.')
+                    ->schema([
+                        CheckboxList::make('bots')
+                            ->hiddenLabel()
+                            ->relationship('bots', 'name')
+                            // Новая услуга по умолчанию продаётся везде.
+                            ->default(fn () => Bot::query()->pluck('id')->all())
+                            ->columns(2)
+                            ->bulkToggleable(),
+                    ]),
+                ...TranslationFields::sections('Текст карточки услуги в боте и Mini App.'),
             ]);
     }
 }

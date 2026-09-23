@@ -3,10 +3,12 @@
 namespace App\Services\Telegram;
 
 use App\Enums\MessageDirection;
+use App\Models\Bot;
 use App\Models\BotMessage;
 use App\Models\Broadcast;
 use App\Models\TelegramUser;
 use App\Models\User;
+use App\Telegram\BotManager;
 use Illuminate\Support\Facades\Log;
 use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Telegram\Exceptions\TelegramException;
@@ -18,10 +20,13 @@ use Throwable;
  * Единственная точка исходящих сообщений: и ответ админа, и рассылка,
  * и системные уведомления проходят здесь, поэтому вся переписка попадает
  * в bot_messages, а заблокировавшие бота отмечаются автоматически.
+ *
+ * Сообщение всегда уходит от того бота, в котором живёт пользователь:
+ * клиент одного бота не получит ответ от другого.
  */
 class BotMessenger
 {
-    public function __construct(private readonly Nutgram $bot) {}
+    public function __construct(private readonly BotManager $bots) {}
 
     /**
      * @return bool Доставлено ли сообщение.
@@ -33,7 +38,7 @@ class BotMessenger
         ?Broadcast $broadcast = null,
         ?InlineKeyboardMarkup $keyboard = null,
     ): bool {
-        $message = $this->deliver($user, fn () => $this->bot->sendMessage(
+        $message = $this->deliver($user, fn () => $this->nutgram($user)->sendMessage(
             text: $text,
             chat_id: $user->chat_id,
             parse_mode: ParseMode::HTML,
@@ -58,7 +63,7 @@ class BotMessenger
      */
     public function sendInvoice(TelegramUser $user, array $invoice, string $logText, ?User $author = null): bool
     {
-        $message = $this->deliver($user, fn () => $this->bot->sendInvoice(
+        $message = $this->deliver($user, fn () => $this->nutgram($user)->sendInvoice(
             ...$invoice,
             chat_id: $user->chat_id,
         ));
@@ -77,10 +82,10 @@ class BotMessenger
      *
      * @param  array<string, mixed>  $invoice  Аргументы createInvoiceLink.
      */
-    public function createInvoiceLink(array $invoice): ?string
+    public function createInvoiceLink(Bot $bot, array $invoice): ?string
     {
         try {
-            return $this->bot->createInvoiceLink(...$invoice);
+            return $this->bots->for($bot)->createInvoiceLink(...$invoice);
         } catch (Throwable $e) {
             Log::warning('Не удалось создать ссылку на счёт', ['error' => $e->getMessage()]);
 
@@ -89,13 +94,15 @@ class BotMessenger
     }
 
     /**
-     * Уведомление администраторам из TELEGRAM_ADMIN_CHAT_IDS.
+     * Уведомление администраторам из TELEGRAM_ADMIN_CHAT_IDS. Уходит от бота,
+     * в котором случилось событие, — администратор должен хоть раз нажать
+     * в нём /start, иначе Telegram не даст боту написать первым.
      */
-    public function notifyAdmins(string $text): void
+    public function notifyAdmins(Bot $bot, string $text): void
     {
         foreach (config('telegram.admin_chat_ids', []) as $chatId) {
             try {
-                $this->bot->sendMessage(
+                $this->bots->for($bot)->sendMessage(
                     text: $text,
                     chat_id: (int) $chatId,
                     parse_mode: ParseMode::HTML,
@@ -107,6 +114,11 @@ class BotMessenger
                 ]);
             }
         }
+    }
+
+    private function nutgram(TelegramUser $user): Nutgram
+    {
+        return $this->bots->for($user->bot);
     }
 
     public function log(

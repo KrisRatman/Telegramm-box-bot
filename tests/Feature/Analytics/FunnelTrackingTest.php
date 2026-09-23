@@ -4,6 +4,7 @@ namespace Tests\Feature\Analytics;
 
 use App\Enums\BotEventType;
 use App\Enums\OrderSource;
+use App\Models\Bot;
 use App\Models\BotEvent;
 use App\Models\Order;
 use App\Models\Service;
@@ -19,11 +20,13 @@ class FunnelTrackingTest extends TestCase
 
     private const CHAT_ID = 424242;
 
+    private Bot $botModel;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        config(['nutgram.token' => self::BOT_TOKEN]);
+        $this->botModel = Bot::factory()->create(['token' => self::BOT_TOKEN]);
     }
 
     public function test_bot_records_catalog_view_and_order_start(): void
@@ -60,10 +63,10 @@ class FunnelTrackingTest extends TestCase
     {
         $service = Service::factory()->create();
 
-        $this->postJson('/app/api/events', ['type' => 'order_started'], $this->miniAppHeaders())
+        $this->postJson("/app/{$this->botModel->id}/api/events", ['type' => 'order_started'], $this->miniAppHeaders())
             ->assertNoContent();
 
-        $this->postJson('/app/api/orders', [
+        $this->postJson("/app/{$this->botModel->id}/api/orders", [
             'items' => [['service_id' => $service->id, 'quantity' => 1]],
             'contact_name' => 'Иван',
             'contact_phone' => '+79001234567',
@@ -77,7 +80,7 @@ class FunnelTrackingTest extends TestCase
 
     public function test_mini_app_rejects_unknown_event_type(): void
     {
-        $this->postJson('/app/api/events', ['type' => 'order_paid'], $this->miniAppHeaders())
+        $this->postJson("/app/{$this->botModel->id}/api/events", ['type' => 'order_paid'], $this->miniAppHeaders())
             ->assertUnprocessable()
             ->assertJsonValidationErrors('type');
 
@@ -86,7 +89,7 @@ class FunnelTrackingTest extends TestCase
 
     public function test_mini_app_event_requires_init_data(): void
     {
-        $this->postJson('/app/api/events', ['type' => 'catalog_viewed'])->assertUnauthorized();
+        $this->postJson("/app/{$this->botModel->id}/api/events", ['type' => 'catalog_viewed'])->assertUnauthorized();
     }
 
     /**

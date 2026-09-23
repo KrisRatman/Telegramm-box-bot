@@ -6,6 +6,7 @@ use Database\Factories\TelegramUserFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TelegramUser extends Model
@@ -14,12 +15,14 @@ class TelegramUser extends Model
     use HasFactory;
 
     protected $fillable = [
+        'bot_id',
         'chat_id',
         'username',
         'first_name',
         'last_name',
         'phone',
         'language_code',
+        'locale',
         'is_blocked',
         'last_activity_at',
     ];
@@ -31,6 +34,12 @@ class TelegramUser extends Model
             'is_blocked' => 'boolean',
             'last_activity_at' => 'datetime',
         ];
+    }
+
+    /** @return BelongsTo<Bot, $this> */
+    public function bot(): BelongsTo
+    {
+        return $this->belongsTo(Bot::class);
     }
 
     /** @return HasMany<Order, $this> */
@@ -59,6 +68,25 @@ class TelegramUser extends Model
     public function scopeSubscribed(Builder $query): void
     {
         $query->where('is_blocked', false);
+    }
+
+    /**
+     * Язык ответов: выбор через /language, иначе язык Telegram,
+     * если он поддерживается, иначе язык бота по умолчанию.
+     */
+    public function preferredLocale(): string
+    {
+        $supported = config('telegram.locales', ['ru']);
+
+        foreach ([$this->locale, $this->language_code] as $candidate) {
+            $candidate = strtolower(substr((string) $candidate, 0, 2));
+
+            if (in_array($candidate, $supported, true)) {
+                return $candidate;
+            }
+        }
+
+        return $this->bot?->default_locale ?? $supported[0];
     }
 
     public function getFullNameAttribute(): string

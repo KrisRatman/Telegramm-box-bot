@@ -48,6 +48,11 @@ class OrdersTable
                     ->label('Услуга')
                     ->searchable()
                     ->wrap(),
+                TextColumn::make('bot.name')
+                    ->label('Бот')
+                    ->badge()
+                    ->color('gray')
+                    ->toggleable(),
                 TextColumn::make('source')
                     ->label('Канал')
                     ->badge()
@@ -72,6 +77,10 @@ class OrdersTable
                     ->sortable(),
             ])
             ->filters([
+                SelectFilter::make('bot')
+                    ->label('Бот')
+                    ->relationship('bot', 'name')
+                    ->preload(),
                 SelectFilter::make('status')
                     ->label('Статус')
                     ->options(OrderStatus::class)
