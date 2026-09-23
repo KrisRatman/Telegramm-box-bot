@@ -28,3 +28,6 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Локальный конфиг MCP: в нём абсолютный путь к PHP на машине разработчика
+.mcp.json

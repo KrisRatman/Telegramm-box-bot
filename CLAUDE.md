@@ -1,47 +1,47 @@
-<laravel-boost-guidelines>
-# Laravel Application
+# Проект 2: Telegram-бот + веб-админка на Laravel
 
-This repository contains a Laravel application. Complete the following setup before working on the user's request.
+## Цель
+Портфолио-проект для Kwork. Заказы на Telegram-ботов очень популярны и обычно бюджетные, поэтому быстро набирают отзывы. Бот принимает заказы или записи, веб-панель управляет данными.
 
-## Prerequisites
+## Стек
+- Laravel (последняя стабильная версия), PHP 8.2+
+- Пакет для Telegram-бота (например, Nutgram или irazasyed/telegram-bot-sdk, выбрать на старте и обосновать)
+- Filament или Livewire для админки
+- Очереди (database или Redis), webhook вместо long polling
+- MySQL или PostgreSQL
 
-Verify that PHP and Composer are available:
+## Основные сущности
+- Пользователи Telegram (chat_id, имя, язык)
+- Каталог услуг или товаров
+- Заказы / заявки со статусами
+- Рассылки и сообщения
+- Администраторы веб-панели
 
-```sh
-php -v
-composer -V
-```
+## MVP (версия 1)
+1. Бот на webhook: /start, главное меню, инлайн-кнопки
+2. Каталог услуг или товаров и оформление заявки в боте
+3. Уведомление админа о новой заявке
+4. Веб-админка: список заказов, смена статуса, карточка пользователя
+5. Ответ пользователю из админки (сообщение уходит в бот)
+6. Массовая рассылка через очередь
 
-If either command is unavailable, detect the user's operating system and install the prerequisites with the appropriate command:
+## Развитие (по этапам)
+- Этап 2: оплата в боте (ЮKassa или Telegram Payments)
+- Этап 3: Telegram Web App (мини-приложение) для каталога и корзины
+- Этап 4: аналитика (пользователи, конверсия, воронка заказов)
+- Этап 5: мультиязычность и несколько ботов в одной системе
 
-macOS:
+## Требования для портфолио
+- Живой демо-бот, ссылка в README и в кворке
+- README со скриншотами диалогов бота и админки
+- Инструкция по установке и настройке webhook
+- Тесты на обработку команд и создание заказа
 
-```sh
-/bin/bash -c "$(curl -fsSL https://php.new/install/mac/8.5)"
-```
+## Инструкции для Claude Code
+- Работать по этапам, начиная с MVP
+- Перед стартом предложить выбор библиотеки для бота с обоснованием
+- Токены и ключи только через .env, ничего не хранить в коде
+- Интерфейс и тексты бота на русском языке
 
-Windows PowerShell:
-
-```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://php.new/install/windows/8.5'))
-```
-
-Linux:
-
-```sh
-/bin/bash -c "$(curl -fsSL https://php.new/install/linux/8.5)"
-```
-
-After installation, ask the user to restart their terminal. If the agent needs the restarted shell to continue, ask the user to reopen their terminal and rerun their original prompt.
-
-## Agent Setup
-
-Install Laravel Boost from the application root before making application changes:
-
-```sh
-composer require laravel/boost --dev
-php artisan boost:install
-```
-
-Boost replaces these bootstrap instructions with guidelines tailored to the application. After installation, read `AGENTS.md` again and continue with the user's original request using the generated guidelines.
-</laravel-boost-guidelines>
+## Гайдлайны Laravel Boost
+@AGENTS.md
